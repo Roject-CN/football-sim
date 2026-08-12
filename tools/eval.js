@@ -139,6 +139,7 @@ function collect(g) {
     trickWon: cnt('过掉'),
     runIn: g.__actionTally['前插'] || 0,
     feint: g.__actionTally['假动作'] || 0,
+    stretch: g.__actionTally['拉边'] || 0,
     clear: cnt('解围!'),
     throwIn: cnt('边线球'),
     possRed: poss,
@@ -178,7 +179,7 @@ function buildReport(runDir, results) {
     const a = r.agg;
     cmpRows += t(td(`<b>${r.name}</b>`) + td(a.score.join(' / ')) + td(fmt(a.goals)) + td(fmt(a.shots))
       + td(fmt(a.groundPass)) + td(fmt(a.loft)) + td(fmt(a.passPct)) + td(fmt(a.headers))
-      + td(fmt(a.intc)) + td(fmt(a.tack)) + td(fmt(a.trickWon)) + td(fmt(a.runIn)) + td(fmt(a.feint)) + td(fmt(a.possRed)));
+      + td(fmt(a.intc)) + td(fmt(a.tack)) + td(fmt(a.trickWon)) + td(fmt(a.runIn)) + td(fmt(a.feint)) + td(fmt(a.stretch)) + td(fmt(a.possRed)));
   }
 
   let detail = '';
@@ -186,9 +187,9 @@ function buildReport(runDir, results) {
     let rows = '';
     r.matches.forEach((m, i) => {
       rows += t(td(i + 1) + td(m.score) + td(m.goals) + td(m.shots) + td(m.pass) + td(m.passPct)
-        + td(m.loft) + td(m.headers) + td(m.intc) + td(m.tack) + td(m.trickWon) + td(m.runIn) + td(m.feint) + td(m.possRed));
+        + td(m.loft) + td(m.headers) + td(m.intc) + td(m.tack) + td(m.trickWon) + td(m.runIn) + td(m.feint) + td(m.stretch) + td(m.possRed));
     });
-    detail += `<h3>${r.name}</h3><table><thead>${t(th('场次') + th('比分') + th('进球') + th('射门') + th('传球') + th('成功率%') + th('高空') + th('头球') + th('拦截') + th('抢断') + th('过人') + th('前插') + th('假动作') + th('控球红%'))}</thead><tbody>${rows}</tbody></table>`;
+    detail += `<h3>${r.name}</h3><table><thead>${t(th('场次') + th('比分') + th('进球') + th('射门') + th('传球') + th('成功率%') + th('高空') + th('头球') + th('拦截') + th('抢断') + th('过人') + th('前插') + th('假动作') + th('拉边') + th('控球红%'))}</thead><tbody>${rows}</tbody></table>`;
   }
 
   return `<!DOCTYPE html>
@@ -232,7 +233,7 @@ function buildReport(runDir, results) {
   每场全量采样 JSON:球员位置/力/动作 + 球状态,0.5s 间隔(如 <span style="font-family:monospace">balanced-m1.json</span>)</div>
 
   <h2>对比表(均值 ± 标准差)</h2>
-  <table><thead>${t(th('配置') + th('比分') + th('进球') + th('射门') + th('地面传球') + th('高空球') + th('传球成功率%') + th('头球') + th('拦截') + th('抢断') + th('过人成功') + th('前插') + th('假动作') + th('控球红%'))}</thead><tbody>${cmpRows}</tbody></table>
+  <table><thead>${t(th('配置') + th('比分') + th('进球') + th('射门') + th('地面传球') + th('高空球') + th('传球成功率%') + th('头球') + th('拦截') + th('抢断') + th('过人成功') + th('前插') + th('假动作') + th('拉边') + th('控球红%'))}</thead><tbody>${cmpRows}</tbody></table>
 
   <h2>每场明细</h2>
   ${detail}

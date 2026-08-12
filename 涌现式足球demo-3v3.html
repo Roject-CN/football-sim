@@ -565,7 +565,7 @@ function passLineClear(fx, fy, tx, ty, opps) {
   return true;
 }
 
-// 进攻支援:R1 期望值空间价值 V = P×Gain − (1−P)×Loss + 创造空间加分
+// 进攻支援:接应者利用空间 + 创造者牺牲自己拉边/纵深(团队分工)
 function supportPositioning(p) {
   const holder = ball.ctrl;
   if (!holder) { recoverPositioning(p); return; }
@@ -575,6 +575,14 @@ function supportPositioning(p) {
   const xC = [holder.x + dg * -45 * sd, holder.x + dg * 40 * sd, holder.x + dg * 100 * sd, holder.x + dg * 155 * sd, holder.x + dg * 210 * sd];
   const yC = [GOAL_Y - 200, GOAL_Y - 100, GOAL_Y, GOAL_Y + 100, GOAL_Y + 200];
   const vopps = viewOpps(p);
+  // 团队分工:离持球者最远的无球队员担任"创造者"——拉边/纵深牺牲跑,创造空间给别人用
+  const offBall = matesOf(p).filter(m => m !== holder);
+  let creator = null, cd = -1;
+  for (const m of offBall) {
+    const d = dist2(m.x, m.y, holder.x, holder.y);
+    if (d > cd) { cd = d; creator = m; }
+  }
+  const isCreator = creator === p && offBall.length >= 2;
   const commit = clamp(((p.x - ownGoalX(p)) * dg) / 800, 0, 1);  // 压上程度(丢球后被反击的暴露)
   const Loss = 0.4 + 0.6 * commit;
   let best = null, bs = -1e9;
@@ -596,12 +604,20 @@ function supportPositioning(p) {
       const da = dist2(x, y, near[0].x, near[0].y), db = dist2(x, y, near[1].x, near[1].y);
       if (da < 150 && db < 150 && Math.abs(da - db) < 60 && (near[0].y - y) * (near[1].y - y) < 0) creation = 1;
     }
-    const Gain = (fast ? 1.5 : 1) * (TUN.wp * prog + TUN.wW * width + TUN.wo * openN) + creation * 0.3;
-    const s = P * Gain - (1 - P) * Loss + TUN.wL * lane * 0.3;
+    let s;
+    if (isCreator) {
+      // 创造者:牺牲自己——拉边(离球远)+ 纵深(防线身后)+ 站两防守者之间;被盯=拖住防守者,空间留给别人
+      const stretchY = Math.abs(y - holder.y) / 260;
+      const depth = clamp(((x - ball.x) * dg + 150) / 350, 0, 1);
+      s = 0.45 * stretchY + 0.35 * depth + creation * 0.4 - (1 - P) * Loss * 0.5;
+    } else {
+      const Gain = (fast ? 1.5 : 1) * (TUN.wp * prog + TUN.wW * width + TUN.wo * openN) + creation * 0.3;
+      s = P * Gain - (1 - P) * Loss + TUN.wL * lane * 0.3;
+    }
     if (s > bs) { bs = s; best = { x, y }; }
   }
-  p.target = best; p.thrust = fast ? 620 : 460; p.sprint = fast;
-  p.action = fast ? '反击跑位' : '支援';
+  p.target = best; p.thrust = fast ? 620 : (isCreator ? 560 : 460); p.sprint = fast || isCreator;
+  p.action = fast ? '反击跑位' : (isCreator ? '拉边' : '支援');
 }
 
 // 防守站位:站线 + 个人车道 + 封堵持球者的传球通道 + 协防补位(队友上抢时收紧)
@@ -696,7 +712,14 @@ function decide(p) {
 
     // —— R4 效用 = 收益 × 成功率估计 × 风格权重 × 风险 ——
     const pressF = nearPress ? clamp(1 - dist2(nearPress.x, nearPress.y, p.x, p.y) / 70, 0, 1) : 0;
-    const dribbleU = (0.12 + p.attrs.speed * 0.07 + (clear ? 0.18 : 0)) * (1 - pressF * 0.6) * TUN.dribble;
+    // 前方开阔度:空间也是资源——反抢后空旷就带球直接冲击
+    let aheadMin = gDist;
+    for (const o of vopps) {
+      const dx = o.x - p.x;
+      if (dx * dg > 0 && Math.abs(o.y - p.y) < 90 && Math.abs(dx) < aheadMin) aheadMin = Math.abs(dx);
+    }
+    const openSpace = clamp(aheadMin / 280, 0, 1);
+    const dribbleU = (0.15 + 0.45 * openSpace + p.attrs.speed * 0.06) * (1 - pressF * 0.6) * TUN.dribble * (transT[p.team] > 0 ? 1.25 : 1);
 
     let shotU = 0;
     if (gDist < 380) {
@@ -718,7 +741,7 @@ function decide(p) {
       for (const o of vopps) if (dist2(o.x, o.y, ptx, pty) < 55) open = false;
       const chan = passLineClear(p.x, p.y, ptx, pty, vopps) ? 1 : 0;
       const succG = (open ? 0.85 : 0.35) * (0.6 + 0.4 * chan);
-      const counterB = transT[p.team] > 0 ? 1.8 : 1;  // 反击中第一脚球优先直塞
+      const counterB = transT[p.team] > 0 ? 1.4 : 1;  // 反击中直塞优先(略降,给带球冲击留空间)
       const u = progN * succG * TUN.pass * counterB + (Math.random() - 0.5) * 0.05;
       if (u > passU) { passU = u; passT = t; passLoft = false; }
       // 高空球:通道被挡时价值骤升,可越过拦截;倍率随 loft 倾向平滑缩放
