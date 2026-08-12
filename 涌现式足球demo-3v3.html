@@ -156,8 +156,8 @@
     <div class="score"><span id="scA">0</span><span class="vs">:</span><span id="scB">0</span></div>
     <div class="info">
       <span id="timer">90.0</span>s · <span id="pos">控球 红 50%</span>
-      <label>红 <select id="selNA"><option>1</option><option>2</option><option selected>3</option></select>人</label>
-      <label>蓝 <select id="selNB"><option>1</option><option>2</option><option selected>3</option></select>人</label>
+      <label>红球员 <select id="selNA"><option>1</option><option>2</option><option selected>3</option></select>人</label>
+      <label>蓝球员 <select id="selNB"><option>1</option><option>2</option><option selected>3</option></select>人</label>
       <label><input type="checkbox" id="ckGK_A" checked>红门将</label>
       <label><input type="checkbox" id="ckGK_B" checked>蓝门将</label>
     </div>
@@ -225,6 +225,7 @@ const AREA_D = 160, AREA_HW = 240;            // 禁区(纵向深 × 半宽)
 const AREA_D2 = 60, AREA_HW2 = 100;           // 小禁区(门区)
 const HEAT_COLS = 22, HEAT_ROWS = 11;         // 热区网格
 const teamName = { A: '红', B: '蓝' };
+const nameOf = (p) => teamName[p.team] + (p.isGK ? '门' : (p.idx + 1));
 const teamColor = { A: '#f85149', B: '#58a6ff' };
 const teamDark  = { A: '#b02f28', B: '#2f6aa8' };
 const dirX = (p) => (p.team === 'A' ? 1 : -1);
@@ -290,13 +291,18 @@ function kickoff() {
   const nA = teamCount('A'), nB = teamCount('B');
   playersA = Array.from({ length: nA }, (_, i) => makePlayer('A', i, anchorsFor('A', nA)[i]));
   playersB = Array.from({ length: nB }, (_, i) => makePlayer('B', i, anchorsFor('B', nB)[i]));
-  if (gkEnabled('A') && playersA.length) {
-    const g = playersA[0]; g.isGK = true; g.attrs.vision = 1.15;
-    g.anchor = { x: X0 + 14, y: GOAL_Y }; g.x = X0 + 14; g.y = GOAL_Y;
+  // 门将不占人数:勾选后额外追加一名门将
+  if (gkEnabled('A')) {
+    const g = makePlayer('A', nA, { x: X0 + 14, y: GOAL_Y });
+    g.isGK = true; g.attrs.vision = 1.15;
+    g.anchor = { x: X0 + 14, y: GOAL_Y };
+    playersA.push(g);
   }
-  if (gkEnabled('B') && playersB.length) {
-    const g = playersB[0]; g.isGK = true; g.attrs.vision = 1.15;
-    g.anchor = { x: X1 - 14, y: GOAL_Y }; g.x = X1 - 14; g.y = GOAL_Y;
+  if (gkEnabled('B')) {
+    const g = makePlayer('B', nB, { x: X1 - 14, y: GOAL_Y });
+    g.isGK = true; g.attrs.vision = 1.15;
+    g.anchor = { x: X1 - 14, y: GOAL_Y };
+    playersB.push(g);
   }
   initTlm();
   bindHeat();
@@ -1435,7 +1441,7 @@ function bindHeat() {
   box.innerHTML = '';
   for (const p of allPlayers()) {
     const btn = document.createElement('button');
-    btn.textContent = teamName[p.team] + (p.idx + 1);
+    btn.textContent = nameOf(p);
     btn.dataset.heat = p.team + p.idx;
     btn.addEventListener('click', () => {
       box.querySelectorAll('button').forEach(b => b.classList.remove('on'));
@@ -1459,7 +1465,7 @@ function endMatch() {
   for (const p of [...playersA, ...playersB]) {
     const t = p.stats;
     const cls = p.team === 'A' ? 'pa' : 'pb';
-    h += `<tr><td class="${cls}">${teamName[p.team]}${p.idx + 1}</td>`
+    h += `<tr><td class="${cls}">${nameOf(p)}</td>`
       + `<td>${t.goal}</td><td>${t.assist}</td>`
       + `<td>${t.shot}/${pct(t.shotOn, t.shot)}</td>`
       + `<td>${t.pass}/${pct(t.passOk, t.pass)}</td>`
