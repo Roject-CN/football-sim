@@ -256,6 +256,18 @@
         <li><span class="box">✓</span><span><span class="txt">感知快照</span><span class="sub">每次决策基于 view 快照,不直接读全局坐标;物理层仍用真实位置</span></span></li>
       </ul>
 
+      <h3>v2.x 细节迭代(全部已实现)<span class="tag done">已实现</span></h3>
+      <ul class="checklist" data-group="细节迭代">
+        <li><span class="box">✓</span><span><span class="txt">门将系统</span><span class="sub">选位/出击(读场)/扑救(预测进门点)/开大脚;不占人数;手拿球不可抢;高空球可扑救</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">死球机制</span><span class="sub">边线球有发球人(走位后掷,保护期0.8s);球门球门将站在球处开(保护期1.2s)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">二过一/节奏/假动作/防守协同</span><span class="sub">传后前插(撞墙)、领先拖/落后赌、虚晃+过人加成、队友上抢时防线收紧</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">蓄力随感知</span><span class="sub">压力↑→蓄力缩短+误差放大(仓促出脚更糙);空间足→从容更准</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">回传门将 + 自家门前强制解围</span><span class="sub">压力大才回传;门前100px持球即解围(杜绝乌龙)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">射门选角 + 挑射涌现</span><span class="sub">看门将站位打远角;门将离门线出击→吊射/弧线(动作涌现化,非特判)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">趟球并入带球执行</span><span class="sub">反击+开阔+无压力→大步趟球;否则紧密护球(非独立动作)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">慢速下拉 / 人数配置 / 门将开关</span><span class="sub">0.25x~4x;1~3球员+门将自由组合</span></span></li>
+      </ul>
+
       <h3>物理与空间<span class="tag done">已实现</span></h3>
       <ul class="checklist" data-group="物理空间">
         <li><span class="box">✓</span><span><span class="txt">2D 球场与球员</span><span class="sub">960×500,纵向 440px,红蓝各 3 人,无门将,圆盘碰撞</span></span></li>
@@ -368,11 +380,13 @@
     <!-- 8 路线图 -->
     <section id="s8">
       <h2><span class="no">8</span>路线图</h2>
-      <h3>已实现(v2.0)<span class="tag done">可玩</span></h3>
+      <h3>已实现(v2.9)<span class="tag done">可玩</span></h3>
       <table>
         <tr><th>阶段</th><th>内容</th><th>状态</th></tr>
         <tr><td>v0.1~v1.0</td><td>沙盒→空间价值→身体对抗→高空球→蓄力→战术预设(1D→2D 全历程)</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
         <tr><td>v2.0</td><td>感知层(视野锥/遮挡/高斯误差/触觉)+ 记忆层(预测/默契度)+ R4 效用 + R1 期望值 + 解围 + 边线球/球门球站位</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v2.1~v2.8</td><td>二过一/节奏/假动作/防守协同 → 门将系统 → 死球机制/蓄力随感知/回传门将/射门选角/高空球扑救/慢速下拉</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v2.9</td><td><b>动作涌现化</b>:射门方式/传球高度/带球趟球全部由局势量化决定,不设离散动作(ADR-9 最高原则)</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
       </table>
       <h3>下一步(按优先级)</h3>
       <div class="timeline">
@@ -387,12 +401,12 @@
 
     <!-- 9 验证 -->
     <section id="s9">
-      <h2><span class="no">9</span>验证记录(v2.0 基线)</h2>
+      <h2><span class="no">9</span>验证记录(v2.9 基线)</h2>
       <div class="grid">
-        <div class="card"><div class="k">胜负均衡</div><div class="v">6 场:红胜 3 / 蓝胜 1 / 平 2(触觉修复前红 0 胜 6 负 0:15)</div></div>
-        <div class="card"><div class="k">抢断 / 拦截</div><div class="v">39~48 / 场 · 10~17 / 场(追身抢断恢复,拦截回归合理)</div></div>
-        <div class="card"><div class="k">传球</div><div class="v">73~105 次/场,成功率可观(预测落点 + 接应 + 默契度)</div></div>
-        <div class="card"><div class="k">战术指纹</div><div class="v">传控/高位逼抢可辨;防守反击 v2.0 下偏弱(1:4/2:6/3:7),待调参</div></div>
+        <div class="card"><div class="k">均衡胜负</div><div class="v">多次 8~10 场抽样:红蓝互有胜负(2~4 胜/3 平),无系统失衡</div></div>
+        <div class="card"><div class="k">传球成功率</div><div class="v">86~91%(误差收窄后);趟球(涌现)9~12 次/场,挑射 0~2 次/场(门将出击时)</div></div>
+        <div class="card"><div class="k">扑救 / 拦截 / 抢断</div><div class="v">2.7~4.3 / 7~17 / 35~55 次/场(门将高空扑救已覆盖)</div></div>
+        <div class="card"><div class="k">战术指纹</div><div class="v">传控=最多传球+最高成功率+最少进球;防反=高进球;高位=高拦截抢断</div></div>
       </div>
     </section>
 
@@ -570,7 +584,7 @@
       </table>
 
       <h3>13.4 当前版本状态(v2.8)</h3>
-      <div class="card"><div class="v"><b>v2.9</b>:3v3+门将(人数可配,门将不占名额)/ 感知层(视野锥+遮挡+触觉+记忆预测)/ 效用决策(R4 收益×成功率×风格×风险)/ 空间价值(R1 期望值+创造者拉边)/ 身体对抗+踉跄/ 高空球+头球/ 二过一+暴趟+假动作/ 节奏控制/ 死球机制(边线球发球人+球门球门将开,发球保护期)/ 蓄力随感知(压力↑蓄力↓误差↑)/ 回传门将+自家门前强制解围/ 门将读场+高空球扑救/ <b>动作涌现化:射门方式(吊射/低平/弧线)由门将站位连续决定,不设离散动作</b>/ 慢速下拉/ 赛后数据+热区图+遥测+导出 / 自动化管线。</div></div>
+      <div class="card"><div class="v"><b>v2.9</b>:3v3+门将(人数可配,门将不占名额)/ 感知层(视野锥+遮挡+触觉+记忆预测)/ 效用决策(R4 收益×成功率×风格×风险)/ 空间价值(R1 期望值+创造者拉边)/ 身体对抗+踉跄/ 高空球+头球/ 二过一+假动作/ 节奏控制/ 死球机制(边线球发球人+球门球门将开,发球保护期)/ 蓄力随感知(压力↑蓄力↓误差↑)/ 回传门将+自家门前强制解围/ 门将读场+高空球扑救/ <b>动作涌现化(ADR-9):射门方式/传球高度/带球趟球全部由局势量化决定,不设离散动作</b>/ 慢速下拉/ 赛后数据+热区图+遥测+导出 / 自动化管线。</div></div>
 
       <h3>13.5 下一步候选(按路线图)</h3>
       <div class="card"><div class="v">情绪层(愤怒值→冲突,已设计待实现)/ 疲劳与精力系统(蓄力失误联动)/ 越位与多阵型 / 教练 AI(自动换战术)/ 自动战斗快模型 / 本地 LLM 新闻。</div></div>
