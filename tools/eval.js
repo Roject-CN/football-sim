@@ -143,6 +143,7 @@ function collect(g) {
     runIn: g.__actionTally['前插'] || 0,
     feint: g.__actionTally['假动作'] || 0,
     stretch: g.__actionTally['拉边'] || 0,
+    burst: cnt('暴趟!'),
     clear: cnt('解围!'),
     throwIn: cnt('边线球'),
     save: cnt('扑出!') + cnt('没收!'),
