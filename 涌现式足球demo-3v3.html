@@ -401,7 +401,7 @@ function updateTlm(dt) {
 // ============ 上下文记忆层(感知记忆 + 预测 + 默契度) ============
 const MEM_LEN = 30, PRED_T = 0.35;     // 环形缓冲 30 条(3s@10Hz) / 预测前瞻 0.35s
 const LOST_AFTER = 1.0;                // 对手超过 1s 没看到 → 记忆清空
-const VISION_R = 380, VISION_HALF = 60; // 视野半径 / 半张角(度)
+const VISION_R = 380, VISION_HALF = 80; // 视野半径 / 半张角(度):半角80=总视野160°(现实有效视野120°+余光,但保留背身盲区防止全知)
 
 function gauss() {  // Box-Muller 高斯噪声
   let u = 0, v = 0;
