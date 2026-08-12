@@ -149,6 +149,20 @@
   <label>对手斥力 <input type="range" data-k="rep" min="0" max="600" step="10" value="300"><span></span></label>
   <label>踉跄时长 <input type="range" data-k="stag" min="0.2" max="2" step="0.05" value="1"><span></span></label>
   <label>蓄力时间 <input type="range" data-k="wind" min="0" max="2" step="0.05" value="1"><span></span></label>
+  <div class="pg">力场空间智能(v4)</div>
+  <label>空位力 <input type="range" data-fk="spaceStr" min="150" max="500" step="10" value="300"><span></span></label>
+  <label>空位带宽 <input type="range" data-fk="spaceBW" min="40" max="120" step="5" value="70"><span></span></label>
+  <label>带宽纵横比 <input type="range" data-fk="spaceAspect" min="1" max="2.5" step="0.1" value="1.6"><span></span></label>
+  <label>阵型吸附 <input type="range" data-fk="homeStr" min="100" max="500" step="10" value="260"><span></span></label>
+  <label>随球平移 <input type="range" data-fk="homeShift" min="0" max="1" step="0.05" value="0.5"><span></span></label>
+  <label>球引力 <input type="range" data-fk="ballStr" min="120" max="500" step="10" value="260"><span></span></label>
+  <label>门保护 <input type="range" data-fk="goalStr" min="150" max="500" step="10" value="320"><span></span></label>
+  <label>弹簧刚度 <input type="range" data-fk="structK" min="0.2" max="0.9" step="0.05" value="0.5"><span></span></label>
+  <label>队友间距 <input type="range" data-fk="structR" min="70" max="160" step="5" value="110"><span></span></label>
+  <label>盯人强度 <input type="range" data-fk="markBase" min="120" max="420" step="10" value="240"><span></span></label>
+  <label>侵略性 <input type="range" data-fk="aggro" min="0.5" max="2" step="0.05" value="1"><span></span></label>
+  <label>转换速率 <input type="range" data-fk="recoverRate" min="1" max="4" step="0.1" value="2.5"><span></span></label>
+  <label>通道力 <input type="range" data-fk="chanStr" min="120" max="320" step="10" value="210"><span></span></label>
   <button id="btnDefault">恢复默认</button>
 </aside>
 <div class="main">
@@ -159,6 +173,8 @@
       <span id="timer">90.0</span>s · <span id="pos">控球 红 50%</span>
       <label>红球员 <select id="selNA"><option>1</option><option>2</option><option selected>3</option></select>人</label>
       <label>蓝球员 <select id="selNB"><option>1</option><option>2</option><option selected>3</option></select>人</label>
+      <label>红AI <select id="selAI_A"><option value="new" selected>力场</option><option value="old">旧逻辑</option></select></label>
+      <label>蓝AI <select id="selAI_B"><option value="new" selected>力场</option><option value="old">旧逻辑</option></select></label>
       <label><input type="checkbox" id="ckGK_A" checked>红门将</label>
       <label><input type="checkbox" id="ckGK_B" checked>蓝门将</label>
     </div>
@@ -1970,6 +1986,26 @@ document.querySelectorAll('#panel input[data-k]').forEach(inp => {
   sync();
   inp.addEventListener('input', sync);
 });
+// 力场参数滑条
+document.querySelectorAll('#panel input[data-fk]').forEach(inp => {
+  const k = inp.dataset.fk;
+  const sync = () => { FT[k] = parseFloat(inp.value); inp.nextElementSibling.textContent = Number(FT[k]).toFixed(2); };
+  sync();
+  inp.addEventListener('input', sync);
+});
+// AI 版本选择(力场/旧逻辑对踢)
+document.getElementById('selAI_A').addEventListener('change', function () { AI_VER.A = this.value; });
+document.getElementById('selAI_B').addEventListener('change', function () { AI_VER.B = this.value; });
+function syncAI() {
+  document.getElementById('selAI_A').value = AI_VER.A;
+  document.getElementById('selAI_B').value = AI_VER.B;
+}
+function syncFT() {
+  for (const k in FT) {
+    const inp = document.querySelector('#panel input[data-fk="' + k + '"]');
+    if (inp) { inp.value = FT[k]; inp.nextElementSibling.textContent = Number(FT[k]).toFixed(2); }
+  }
+}
 document.getElementById('btnDefault').addEventListener('click', () => {
   const d = { pass: 1, shoot: 1, trick: 1, dribble: 1, wo: 0.3, wc: 0.3, wp: 0.2, wW: 0.13, wL: 0.12, dDeny: 0.35, dOpen: 0.3, dLane: 0.35, rep: 300, stag: 1, wind: 1, dLine: 0.35, press: 1, sDepth: 1, loft: 1 };
   for (const k in d) {
@@ -1977,10 +2013,21 @@ document.getElementById('btnDefault').addEventListener('click', () => {
     const inp = document.querySelector('#panel input[data-k="' + k + '"]');
     if (inp) { inp.value = d[k]; inp.nextElementSibling.textContent = d[k].toFixed(2); }
   }
+  const dft = { homeStr: 260, homeShift: 0.5, ballStr: 260, goalStr: 320, structK: 0.5, structR: 110, markBase: 240, spaceStr: 300, spaceBW: 70, spaceAspect: 1.6, chanStr: 210, aggro: 1, recoverRate: 2.5 };
+  for (const k in dft) FT[k] = dft[k];
+  syncFT();
   document.querySelectorAll('#tacBtns button').forEach(b => b.classList.toggle('on', b.dataset.t === 'balanced'));
 });
 
 // ============ 战术预设 ============
+// 力场模板:同一范式下用参数表达战术指纹
+const FT_TACTICS = {
+  balanced: {},
+  tiki: { spaceBW: 55, chanStr: 250, aggro: 1.1, structK: 0.65, spaceStr: 260 },
+  counter: { goalStr: 380, homeShift: 0.35, recoverRate: 3, spaceStr: 340 },
+  longball: { spaceBW: 100, spaceAspect: 1.3, chanStr: 180, homeShift: 0.45, structR: 130 },
+  gegen: { aggro: 1.8, ballStr: 340, goalStr: 260, homeShift: 0.7, recoverRate: 3.2, spaceStr: 250 }
+};
 const TACTICS = {
   balanced: { name: '均衡', values: { pass: 1, shoot: 1, trick: 1, dribble: 1, wo: 0.3, wc: 0.3, wp: 0.2, wW: 0.13, wL: 0.12, dDeny: 0.35, dOpen: 0.3, dLane: 0.35, rep: 300, stag: 1, wind: 1, dLine: 0.35, press: 1, sDepth: 1, loft: 1 } },
   tiki: { name: '传控', values: { pass: 1.6, shoot: 0.6, trick: 1, dribble: 0.9, wo: 0.35, wc: 0.45, wp: 0.1, wW: 0.2, wL: 0.15, dDeny: 0.45, dOpen: 0.25, dLane: 0.3, rep: 300, stag: 1, wind: 0.8, dLine: 0.42, press: 1.1, sDepth: 0.6, loft: 0.3 } },
@@ -1996,6 +2043,10 @@ function applyTactic(key) {
     const inp = document.querySelector('#panel input[data-k="' + k + '"]');
     if (inp) { inp.value = t.values[k]; inp.nextElementSibling.textContent = Number(t.values[k]).toFixed(2); }
   }
+  // 力场模板同步
+  const ftt = FT_TACTICS[key] || {};
+  for (const k in ftt) FT[k] = ftt[k];
+  syncFT();
   document.querySelectorAll('#tacBtns button').forEach(b => b.classList.toggle('on', b.dataset.t === key));
 }
 document.querySelectorAll('#tacBtns button').forEach(btn => {
@@ -2071,6 +2122,7 @@ document.getElementById('ckTlm').addEventListener('change', function () {
 });
 
 kickoff();
+syncAI();
 initTlm();
 bindHeat();
 requestAnimationFrame(frame);
