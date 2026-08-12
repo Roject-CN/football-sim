@@ -67,8 +67,8 @@ function loadGameCode() {
   return m[1];
 }
 
-// ---------- 单场模拟 ----------
-function runMatch(code, tun, seedLog) {
+// ---------- 单场模拟(含全量采样:每 0.5s 记录所有球员位置/力/动作 + 球状态) ----------
+function runMatch(code, tun) {
   const ctx2d = makeCtx();
   const elements = {};
   global.document = {
@@ -84,14 +84,29 @@ function runMatch(code, tun, seedLog) {
   const tail = `
 global.__g = { kickoff, step, scoreA: () => scoreA, scoreB: () => scoreB,
   possA: () => possA, possB: () => possB, playersA: () => playersA, playersB: () => playersB,
-  logHistory, TUN, transT };
+  simT: () => simT, ball: () => ball, logHistory, TUN, transT };
 `;
   new Function(code + tail)();
   const g = global.__g;
   g.kickoff();
   Object.assign(g.TUN, tun);  // 应用配置
   g.transT.A = 0; g.transT.B = 0;
-  for (let i = 0; i < 60 * 90; i++) g.step(1 / 60);  // 90 分钟
+  const samples = [];
+  let sTimer = 0;
+  for (let i = 0; i < 60 * 90; i++) {  // 90 分钟
+    g.step(1 / 60);
+    sTimer += 1 / 60;
+    if (sTimer >= 0.5) {
+      sTimer = 0;
+      const b = g.ball();
+      samples.push({
+        t: +g.simT().toFixed(1),
+        ball: [+b.x.toFixed(0), +b.y.toFixed(0), +b.alt.toFixed(0), b.ctrl ? b.ctrl.id : null],
+        players: [...g.playersA(), ...g.playersB()].map(p => [+p.x.toFixed(0), +p.y.toFixed(0), +p.fx.toFixed(0), +p.fy.toFixed(0), p.action || ''])
+      });
+    }
+  }
+  g.__samples = samples;
   return g;
 }
 
@@ -203,7 +218,8 @@ function buildReport(runDir, results) {
 <div class="wrap">
   <div class="kickoff">AUTO-EVAL PIPELINE · ITERATION REPORT</div>
   <h1>自动化评估报告</h1>
-  <div class="sub">生成时间: ${new Date().toLocaleString()} · 每套配置 ${results[0].matches.length} 场 · 数据目录: <span style="font-family:monospace">data/runs/</span>(旧轮自动清理)</div>
+  <div class="sub">生成时间: ${new Date().toLocaleString()} · 每套配置 ${results[0].matches.length} 场 · 数据目录: <span style="font-family:monospace">data/runs/</span>(旧轮自动清理)<br>
+  每场全量采样 JSON:球员位置/力/动作 + 球状态,0.5s 间隔(如 <span style="font-family:monospace">balanced-m1.json</span>)</div>
 
   <h2>对比表(均值 ± 标准差)</h2>
   <table><thead>${t(th('配置') + th('比分') + th('进球') + th('射门') + th('地面传球') + th('高空球') + th('传球成功率%') + th('头球') + th('拦截') + th('抢断') + th('过人成功') + th('控球红%'))}</thead><tbody>${cmpRows}</tbody></table>
@@ -263,7 +279,11 @@ function main() {
     const matches = [];
     for (let i = 0; i < args.rounds; i++) {
       const g = runMatch(gameCode, cfg.tun);
-      matches.push(collect(g));
+      const stat = collect(g);
+      matches.push(stat);
+      // 全量采样落盘:每场独立 JSON(位置/力/动作/球,0.5s 间隔)
+      fs.writeFileSync(path.join(runDir, `${cfg.key}-m${i + 1}.json`),
+        JSON.stringify({ config: cfg.name, match: i + 1, summary: stat, samples: g.__samples }), 'utf8');
     }
     const out = { key: cfg.key, name: cfg.name, desc: cfg.desc || '', matches, agg: aggregate(matches) };
     fs.writeFileSync(path.join(runDir, `${cfg.key}.json`), JSON.stringify(out, null, 2), 'utf8');

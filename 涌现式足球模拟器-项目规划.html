@@ -415,6 +415,8 @@
         <tr><td>反作用</td><td class="dim">防守通道封堵、传球通道评估、逼抢目标、支援开放度,全部使用对手的<b>预测位置</b>(R5)</td></tr>
       </table>
 
+      <p class="dim" style="margin-top:8px"><b>队友记忆 = 默契度(规划)</b>:队友被遮挡时<b>不清空</b>——用"战术期望"(阵型锚点 + 球位偏移)填补他的位置。传球给看不见的队友是<b>默契</b>不是赌(现实里球员坚信队友会跑到那里)。对手记忆仍按遮挡 1s 清空(不能透视)。</p>
+
       <div class="tag core" style="margin-bottom:8px">决策记忆(设计定稿)</div>
       <table>
         <tr><th>项</th><th>规格</th><th>用途</th></tr>
@@ -467,6 +469,19 @@
       </table>
       <p class="dim" style="margin-top:10px"><b>风险系数 = f(比分, 剩余时间, 破局计时器)</b>:落后/末段 → 愿意赌低成功率高收益的动作(直塞/远射);领先 → 偏向高成功率动作。<br>
       <b>数值策略</b>:成功率表先用<b>静态查表</b>,管线跑 3 档对比(如干扰下射门 0.2/0.3/0.4 各 10 场),挑行为最像真实足球的档位;验证后再升级为<b>动态估计</b>(由感知数据算连续函数)。</p>
+
+      <h3>11.7 解围机制(迫于无奈,规划)</h3>
+      <div class="card"><div class="v">持球者被<b>层层包围</b>(贴身 2 人以上)且无传球通道、无推进空间时,破局计时器进入<b>绝望档</b>:<br>
+      ① <b>大力解围</b>:朝前场高空大脚(成功率低,但避免无限护球被抢)→ 标签"解围!"<br>
+      ② 近门时:<b>强行射门</b>(哪怕被挡)<br>
+      触发优先级高于正常效用(生理性动作,不经过理性权衡),是 R6 破局计时器的极端档。</div></div>
+
+      <h3>11.8 定位球规则(现实化,规划)</h3>
+      <table>
+        <tr><th>规则</th><th>现状</th><th>目标</th></tr>
+        <tr><td>边线球</td><td class="dim">球撞上下边线反弹(墙壁)</td><td class="dim">真实规则:出边线 → 最后触球方的对手掷边线球</td></tr>
+        <tr><td>球门球站位</td><td class="dim">只重置球,双方原地站位混乱</td><td class="dim">开球门球时双方按阵型锚点复位站位(与中圈开球一致),杜绝"趁乱偷鸡"</td></tr>
+      </table>
     </section>
 
     <!-- 12 自动化管线 -->
@@ -486,7 +501,7 @@
       <h3>12.2 流程与产物</h3>
       <div class="stack">
         <div class="layer" style="--lc:#3fb950"><div class="ln">① 抽取</div><div class="ld">从 demo HTML 抽取游戏逻辑,无头运行——单一真源,不改 demo 文件</div></div>
-        <div class="layer" style="--lc:#58a6ff"><div class="ln">② 对局</div><div class="ld">每配置 N 场 90s 完整比赛,收集:比分/控球/射门/传球(地面·高空)/成功率/头球/拦截/抢断/过人,含每场明细</div></div>
+        <div class="layer" style="--lc:#58a6ff"><div class="ln">② 对局</div><div class="ld">每配置 N 场 90s 完整比赛,收集:比分/控球/射门/传球(地面·高空)/成功率/头球/拦截/抢断/过人 + <b>每场全量采样</b>(每 0.5s:所有球员位置/力/动作 + 球状态,写入各场独立 JSON)</div></div>
         <div class="layer" style="--lc:#d29922"><div class="ln">③ 报告</div><div class="ld">data/runs/&lt;时间戳&gt;/report.html —— 深色主题对比表(均值±标准差)+ 每场明细 + 5 个预设的观察问题(仓库统一 HTML)</div></div>
         <div class="layer" style="--lc:#3fb950"><div class="ln">④ 分析</div><div class="ld">LLM/人在对话中读报告,回答观察问题,定位失衡/抖动,给出下一轮参数建议</div></div>
         <div class="layer" style="--lc:#58a6ff"><div class="ln">⑤ 迭代</div><div class="ld">改参数/改规则 → 重跑;完成后自动删除旧轮 data/runs 目录,只留最新</div></div>
