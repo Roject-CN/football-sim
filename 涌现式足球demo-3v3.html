@@ -936,155 +936,236 @@ function decide(p) {
   else recoverPositioning(p);
 }
 
-// 蓄力:准备时间与力度成正比,且随压力缩短——空间足=从容出脚(更准),被逼=仓促出脚(更糙)
-function startPass(p, t, loft, pressF) {
-  // 误差随压力放大(被逼=仓促传,精度下降),回传己方半场/门将的球误差减半
-  const isBack = t.isGK || ((t.x - p.x) * dirX(p) < 0);
-  const e = (1 - p.attrs.pass) * 45 * (1 + 1.2 * pressF) * (isBack ? 0.5 : 1);
-  // 与决策层一致:传预测落点(接球者位置 + 速度×飞行时间)
-  const d0 = Math.max(1, dist2(p.x, p.y, t.x, t.y));
-  const Tf = d0 / clamp(d0 * 2.0, 300, 540);
-  const ptx = clamp(t.x + t.vx * Tf + dirX(p) * 12, X0 + 24, X1 - 24);  // 轻微前领,传跑方向感
-  const pty = clamp(t.y + t.vy * Tf, Y0 + 24, Y1 - 24);
-  const tx = clamp(ptx + (Math.random() - 0.5) * 2 * e, X0 + 24, X1 - 24);
-  const ty = clamp(pty + (Math.random() - 0.5) * 2 * e, Y0 + 24, Y1 - 24);
-  const d = Math.max(1, dist2(p.x, p.y, tx, ty));
-  // 门将目标:球速保底 380(回传要够快,不能被慢吞吞滚进自家门)
-  const sp = loft ? clamp(d * 1.9, 300, 520) : clamp(Math.max(d * 2.0, t.isGK ? 380 : 300), 300, 540);
-  const power = clamp((sp - 300) / 300, 0, 1);
-  p.windup = TUN.wind * (0.06 + 0.30 * power) * (1 - 0.45 * pressF);  // 被逼→仓促出球
-  p.windAct = { type: 'pass', t, loft, tx, ty, sp, errMul: 1 + 2 * pressF };  // 被逼→精度下降
-  p.label = loft ? '蓄力·高空' : '蓄力·传球'; p.labelT = Math.min(1.0, 0.35 + p.windup * 2);
-}
+// ============ 统一对球作用(涌现核心) ============
+// 哲学:所有出球 = 同一个动作"踢向目标点"(方向/力度/高度/弧线由局势连续推出);
+// 踢向队友=传球、踢向球门=射门、踢向身前空间=趟球、踢向安全区=解围、踢向对手侧后=过人。
+// 选哪一个 = 统一效用公式 收益 × 成功率估计 × 风格权重 × 风险 的自然胜出——没有动作特判分支。
+// 蓄力(身体准备)与力度成正比、随压力缩短:空间足=从容出脚,被逼=仓促出脚。
 
-function startShot(p, pressF) {
-  const gk = gkOf(p.team === 'A' ? 'B' : 'A');
-  // 执行方式由局势自然决定(不是硬编码动作):
-  //  - 门将离门线出击且近 → 挑射吊过其头顶(带弧线)
-  //  - 门将在位 → 低平/推射打远角
-  //  - 空门 → 随机打角
-  let loft = false, bend = 0, aimY;
-  if (gk) {
-    const gkDist = dist2(gk.x, gk.y, p.x, p.y);
-    const gkOffLine = Math.abs(gk.x - ownGoalX(gk)) > 80;
-    const far = gk.y < GOAL_Y ? 1 : -1;
-    if (gkOffLine && gkDist < 260) {
-      loft = true;  // 挑射:吊过出击门将
-      aimY = GOAL_Y + far * GOAL_H * 0.3 + (Math.random() - 0.5) * 20;
-      bend = far * (0.4 + Math.random() * 0.5);  // 轻微弧线
-    } else {
-      aimY = GOAL_Y + far * GOAL_H * 0.32 + (Math.random() - 0.5) * 20;  // 远角
-    }
-  } else {
-    aimY = GOAL_Y + (Math.random() < 0.5 ? -1 : 1) * GOAL_H * 0.30;
-  }
-  // 精度散布:好射手贴角,差射手飘(被逼抢更飘)
-  const spread = Math.max(12, (1.3 - p.attrs.shoot) * 150) * (1 + 1.5 * pressF);
-  const ty = aimY + (Math.random() - 0.5) * 2 * spread;
-  const gd = dist2(p.x, p.y, goalX(p), GOAL_Y);
-  const sp = loft ? clamp(gd * 2.2, 420, 640) : clamp(gd * 1.8, 140, 760);
-  const power = clamp((sp - 140) / 620, 0, 1);
-  p.windup = TUN.wind * (0.02 + 0.40 * power) * (1 - 0.5 * pressF);
-  // xG:用瞄准点评估(远角/挑射对门将覆盖低 → 评估与执行一致)
-  const gkF = gk ? gkCoverage(gk, gd, aimY) : 0.5;
-  const succBase = gd < 200 ? 0.9 : 0.6;
-  const xg = succBase * (1 - gkF);
-  p.windAct = { type: 'shot', ty, sp, xg, loft, bend };
-  p.label = loft ? '蓄力·挑射' : '蓄力·射门'; p.labelT = Math.min(1.0, 0.35 + p.windup * 2);
-}
-
-function firePass(p) {
-  const a = p.windAct;
-  ball.ctrl = null;
-  ball.lastTouch = p;
-  ball.alt = 0; ball.altV = 0;
-  const d = Math.max(1, dist2(p.x, p.y, a.tx, a.ty));
-  ball.vx = (a.tx - p.x) / d * a.sp;
-  ball.vy = (a.ty - p.y) / d * a.sp;
-  if (a.loft) { ball.alt = 40; ball.altV = clamp(dist2(p.x, p.y, a.tx, a.ty) * 0.8, 180, 330); }
-  p.cd = 0.35;
-  p.label = a.loft ? '高空球' : '传球'; p.labelT = 0.7;
-  p.windAct = null;
-  p.stats.pass++;
-  pendingPass = { p, t: a.t, at: simT };
-  a.t.receive = { until: simT + 1.3 };
-  p.runAfter = { until: simT + 1.5 };  // 二过一:传完球前插
-  log(`${nameOf(p)} ${a.loft ? '高空球' : '传球'} → ${nameOf(a.t)}`, '');
-}
-
-function fireShot(p) {
-  const a = p.windAct;
-  ball.ctrl = null;
-  ball.lastTouch = p;
-  ball.alt = a.loft ? 40 : 0;
-  ball.altV = a.loft ? 320 + Math.random() * 100 : 0;
-  ball.bend = a.loft ? a.bend : 0;  // 弧线:飞行中持续横向偏转
-  const d = Math.max(1, dist2(p.x, p.y, goalX(p), a.ty));
-  ball.vx = (goalX(p) - p.x) / d * a.sp;
-  ball.vy = (a.ty - p.y) / d * a.sp;
-  p.cd = 0.3;
-  p.label = a.loft ? '挑射' : '射门'; p.labelT = 0.8;
-  p.windAct = null;
-  p.stats.shot++;
-  if (Math.abs(a.ty - GOAL_Y) <= GOAL_H / 2) p.stats.shotOn++;
-  if (p.team === 'A') xgA += a.xg; else xgB += a.xg;
-  log(`${nameOf(p)} ${a.loft ? '挑射!' : '射门!'}`, '');
-}
-
-// 趟球(带球的大步推进执行方式):力度由局势连续决定——
-//  空间越大/追兵越近 → 趟得越远(推进/甩开);边线/底线/门将/空间余量 → 收窄上限
-function doBurst(p) {
+// 趟球距离:空间主导 + 追兵修正 + 速度属性,边线/底线/门将收窄上限(局势连续决定)
+function dribbleDist(p) {
   const dg = dirX(p);
-  // 追兵距离(身前/侧面的对手):追得越紧,趟得越远
   let chase = 1e9;
   for (const o of oppsOf(p)) {
     const d = dist2(o.x, o.y, p.x, p.y);
     if (d < chase && (o.x - p.x) * dg > -40) chase = d;
   }
-  // 前方空间(朝球门方向的最近对手):空间越大趟得越远
   let ahead = 1e9;
   for (const o of oppsOf(p)) {
     const d = dist2(o.x, o.y, p.x, p.y);
     if ((o.x - p.x) * dg > 0 && d < ahead) ahead = d;
   }
-  const chaseFactor = chase < 1e9 ? clamp(1.5 - chase / 200, 0.6, 1.4) : 0.6;  // 追兵越近趟得越远
-  const spaceFactor = clamp(ahead / 260, 0.25, 1.2);                              // 前方空间主导
-  // 空间主导 + 追兵修正 + 速度属性:开阔→大步推进,拥挤→短趟控球
+  const chaseFactor = chase < 1e9 ? clamp(1.5 - chase / 200, 0.6, 1.4) : 0.6;
+  const spaceFactor = clamp(ahead / 260, 0.25, 1.2);
   let dist = clamp(45 + 130 * spaceFactor * (chaseFactor * 0.8) + 15 * p.attrs.speed, 50, 280);
-  // 约束收窄:不趟出边线/底线,不趟进门将怀里(门将离位时留出安全余量)
   let room = 1e9;
   const gk = gkOf(p.team === 'A' ? 'B' : 'A');
-  room = Math.min(room, dg > 0 ? (X1 - 40 - p.x) : (p.x - 40 - X0));  // 边线/底线余量
-  if (gk && (gk.x - p.x) * dg > 0) room = Math.min(room, Math.abs(gk.x - p.x) - 60);  // 门将身前 60px 停球
+  room = Math.min(room, dg > 0 ? (X1 - 40 - p.x) : (p.x - 40 - X0));
+  if (gk && (gk.x - p.x) * dg > 0) room = Math.min(room, Math.abs(gk.x - p.x) - 60);
   room = Math.max(room, 30);
-  dist = Math.min(dist, room);
-  const t = 0.5 + Math.random() * 0.25;
-  const v0 = dist / ((1 - Math.exp(-0.5 * t)) / 0.5);
-  ball.ctrl = null;
-  ball.lastTouch = p;
-  ball.alt = 0; ball.altV = 0;
-  ball.x = clamp(p.x + dg * (PR + BR + 4), X0 + BR, X1 - BR);
-  ball.y = p.y;
-  ball.vx = dg * v0;
-  ball.vy = (Math.random() - 0.5) * 40;
-  p.cd = 0.25;
-  p.sprint = true;
-  p.label = '暴趟'; p.labelT = 0.6;
-  log(`${nameOf(p)} 暴趟!`, '');
+  return Math.min(dist, room);
 }
 
-// 11.7 解围:被包围且无路可走,生理性大脚解围(高弧线,飞出危险区)
-function clearBall(p) {
+function pickKick(p) {
+  const pb = p.view.ball;
+  const dg = dirX(p);
+  const gc = { x: goalX(p), y: GOAL_Y };
+  const gDist = dist2(p.x, p.y, gc.x, gc.y);
+  const vopps = viewOpps(p);
+  const opp = pressedBy(p, vopps);
+  const clearLine = clearShot(p, vopps);
+  const touch = touchOpps(p, 70);
+  let nearPress = null, npd = 1e9;
+  for (const o of touch) {
+    const d = dist2(o.x, o.y, p.x, p.y);
+    if (d < npd) { npd = d; nearPress = o; }
+  }
+  const pressF = nearPress ? clamp(1 - npd / 70, 0, 1) : 0;
+  const desperate = p.patience > 2.5;
+  const risk = teamRisk(p.team) + (desperate ? 0.3 : 0);
+  const oppGK = gkOf(p.team === 'A' ? 'B' : 'A');
+
+  let best = null, bu = -1e9;
+
+  // —— 踢向队友(传球):高度 = 通道被挡程度(连续),空地贴地、被挡起高 ——
+  for (const t of matesOf(p)) {
+    if (t === p) continue;
+    const dd = Math.max(1, dist2(p.x, p.y, t.x, t.y));
+    const Tf = dd / clamp(dd * 2.0, 300, 540);
+    const ptx = clamp(t.x + t.vx * Tf + dg * 12, X0 + 24, X1 - 24);
+    const pty = clamp(t.y + t.vy * Tf, Y0 + 24, Y1 - 24);
+    const isBack = (t.x - p.x) * dg < 0;
+    const progN = clamp(((ptx - p.x) * dg + 200) / 400, 0, 1.2);
+    let open = true;
+    for (const o of vopps) if (dist2(o.x, o.y, ptx, pty) < 55) open = false;
+    const chan = passLineClear(p.x, p.y, ptx, pty, vopps) ? 1 : 0;
+    const h = 1 - chan;
+    const succ = (1 - h) * ((open ? 0.85 : 0.35) * (0.6 + 0.4 * chan)) + h * 0.55 * (0.5 + 0.5 * h);
+    const safety = isBack ? 0.7 * pressF : 0;
+    const counterB = transT[p.team] > 0 ? 1.4 : 1;
+    const u = (progN + safety) * succ * TUN.pass * (1 + h * 0.6 * TUN.loft) * counterB * risk + (Math.random() - 0.5) * 0.05;
+    if (u > bu) {
+      bu = u;
+      best = { type: 'pass', tx: ptx, ty: pty, sp: clamp(dd * (1.7 + h * 0.6), 300, 560), alt: h * 45, bend: 0, t, pressF, u };
+    }
+  }
+
+  // —— 踢向球门(射门):落点/方式由门将站位推出(远角/出击挑射/空门角),门将覆盖决定成功率 ——
+  {
+    const angTop = Math.atan2((GOAL_Y - GOAL_H / 2) - p.y, goalX(p) - p.x);
+    const angBot = Math.atan2((GOAL_Y + GOAL_H / 2) - p.y, goalX(p) - p.x);
+    const angleFactor = clamp(Math.abs(angTop - angBot) / 0.5, 0.25, 1);
+    const gkClose = oppGK && dist2(oppGK.x, oppGK.y, p.x, p.y) < 80;
+    let loft = 0, bend = 0, aimY = GOAL_Y;
+    if (oppGK) {
+      const gkDist = dist2(oppGK.x, oppGK.y, p.x, p.y);
+      const gkOffLine = Math.abs(oppGK.x - ownGoalX(oppGK)) > 80;
+      const far = oppGK.y < GOAL_Y ? 1 : -1;
+      if (gkOffLine && gkDist < 260) { loft = 1; aimY = GOAL_Y + far * GOAL_H * 0.3; bend = far * (0.4 + Math.random() * 0.5); }
+      else aimY = GOAL_Y + far * GOAL_H * 0.32;
+    } else aimY = GOAL_Y + (Math.random() < 0.5 ? -1 : 1) * GOAL_H * 0.30;
+    const gkF = oppGK ? gkCoverage(oppGK, gDist, aimY) : 0.5;
+    let benefit = 0, succ = 0;
+    if (clearLine) {
+      // 收益随靠近球门陡升(禁区内射门是高价值行为),角度修正——连续局势,不是阈值
+      benefit = clamp(1.3 - gDist / 750, 0.05, 1) * angleFactor;
+      const succBase = gkClose ? 0.65 : (gDist < 250 ? 0.95 : 0.6);
+      succ = succBase * (1 - gkF * (gkClose ? 0.55 : 1));
+    } else if (gDist < 300) {
+      benefit = clamp(1.15 - gDist / 520, 0.05, 1) * angleFactor;
+      succ = (nearPress ? 0.3 : 0.45) * (1 - gkF);
+    }
+    const u = benefit * succ * TUN.shoot * risk;
+    if (u > bu) {
+      const spread = Math.max(12, (1.3 - p.attrs.shoot) * 150) * (1 + 1.5 * pressF);
+      const ty = aimY + (Math.random() - 0.5) * 2 * spread;
+      const sp = loft ? clamp(gDist * 2.2, 420, 640) : clamp(gDist * 1.8, 140, 760);
+      const xg = (gkClose ? 0.65 : (gDist < 250 ? 0.95 : 0.6)) * (1 - gkF * (gkClose ? 0.55 : 1));
+      best = { type: 'shot', tx: gc.x, ty, sp, alt: loft ? 40 : 0, bend, pressF, xg, u };
+    }
+  }
+
+  // —— 踢向身前空间(趟球):距离由 空间/追兵/速度 连续决定;有真正空间+反击爆发时才大步趟 ——
+  let openSpace = 0, knockOn = false;
+  {
+    let aheadMin = gDist;
+    for (const o of vopps) {
+      const dx = o.x - p.x;
+      if (dx * dg > 0 && Math.abs(o.y - p.y) < 90 && Math.abs(dx) < aheadMin) aheadMin = Math.abs(dx);
+    }
+    openSpace = clamp(aheadMin / 280, 0, 1);
+    const canBurst = simT - p.lastKnock > 2.5;
+    const u = canBurst ? (0.15 + 0.45 * openSpace + p.attrs.speed * 0.06) * (1 - pressF * 0.6) * TUN.dribble * (transT[p.team] > 0 ? 1.25 : 1) : 0;
+    if (u > bu) {
+      const D = dribbleDist(p);
+      const t = 0.5 + Math.random() * 0.25;
+      const v0 = D / ((1 - Math.exp(-0.5 * t)) / 0.5);
+      knockOn = openSpace > 0.75 && pressF < 0.15 && transT[p.team] > 0;
+      best = { type: 'dribble', tx: clamp(p.x + dg * D, X0 + BR, X1 - BR), ty: p.y, sp: v0, alt: 0, bend: 0, knockOn, pressF, u };
+    }
+  }
+
+  // —— 踢向安全区(解围):危险度 = 离自家门近 + 被围困久;是保底候选,不是特判 ——
+  // 效用随危险度平方上升:自家门口被逼→必然解围,中场只在无出路时胜出,对方半场=0 不参与
+  {
+    const danger = clamp(1 - (p.x - ownGoalX(p)) * dg / 800 + 0.35 * desperate, 0, 1);
+    const bx = clamp(p.x + dg * 340, X0 + PR + 6, X1 - PR - 6);
+    let by = p.y, bo = -1;
+    for (const cy0 of [GOAL_Y - 200, GOAL_Y - 100, GOAL_Y, GOAL_Y + 100, GOAL_Y + 200]) {
+      const y = clamp(cy0, Y0 + PR + 6, Y1 - PR - 6);
+      let open = 1e9;
+      for (const o of vopps) open = Math.min(open, dist2(bx, y, o.x, o.y));
+      if (open > bo) { bo = open; by = y; }
+    }
+    const u = danger * danger * 0.75 * (0.5 + 0.5 * pressF);
+    if (u > bu) {
+      const d = Math.max(1, dist2(p.x, p.y, bx, by));
+      best = { type: 'clear', tx: bx, ty: by, sp: clamp(420 + d * 0.5, 500, 780), alt: 50, bend: 0, pressF, u };
+    }
+  }
+
+  // —— 踢向对手侧后(过人):目标 = 空隙侧,成功率 = 盘带/防守属性对比(身体对抗的抽象) ——
+  if (opp) {
+    const oppDef = opp.ref ? opp.ref.attrs.defend : 0.9;
+    const succT = clamp(0.5 * p.attrs.dribble / (p.attrs.dribble + oppDef) + 0.15, 0, 0.85);
+    const u = 0.8 * succT * TUN.trick * risk;
+    if (u > bu) {
+      const s1 = sideClear(p, 1, vopps), s2 = sideClear(p, -1, vopps);
+      const side = s1 && s2 ? (Math.random() < 0.5 ? -1 : 1) : s1 ? 1 : -1;
+      best = { type: 'trick', tx: clamp(opp.x + dg * (PR + BR + 14), X0 + BR, X1 - BR), ty: clamp(opp.y + side * (PR + BR + 10), Y0 + BR, Y1 - BR), sp: 280 + 60 * p.attrs.speed, alt: 0, bend: 0, opp, pressF, u };
+    }
+  }
+
+  return best;
+}
+
+// 蓄力:准备时间与力度成正比,且随压力缩短;捅球(趟/过)摆腿小,重踢(传/射/解围)摆腿大
+function startKick(p, cand) {
+  const power = clamp((cand.sp - 120) / 600, 0, 1);
+  const quick = cand.type === 'trick' || cand.type === 'dribble';
+  p.windup = TUN.wind * (quick ? 0.04 + 0.12 * power : 0.05 + 0.35 * power) * (1 - 0.45 * cand.pressF);
+  p.windAct = cand;
+  p.label = '蓄力·' + ({ pass: '传球', shot: '射门', clear: '解围', trick: '过人', dribble: '趟球' })[cand.type];
+  p.labelT = Math.min(1.0, 0.35 + p.windup * 2);
+}
+
+// 统一执行:唯一的"踢向目标点"——力度/高度/弧线全部来自决策候选的连续参数
+function fireKick(p) {
+  const a = p.windAct;
   ball.ctrl = null;
   ball.lastTouch = p;
-  ball.alt = 50; ball.altV = 380 + Math.random() * 120;
-  const dir = dirX(p);
-  ball.vx = dir * (520 + Math.random() * 260);
-  ball.vy = (Math.random() - 0.5) * 360;
-  p.cd = 0.5;
-  p.label = '解围'; p.labelT = 0.8;
-  p.patience = 0;
-  log(`${nameOf(p)} 解围!`, '');
+  ball.alt = a.alt; ball.altV = a.alt > 0 ? clamp(dist2(p.x, p.y, a.tx, a.ty) * 0.8, 180, 380) : 0;
+  ball.bend = a.bend || 0;
+  const d = Math.max(1, dist2(p.x, p.y, a.tx, a.ty));
+  ball.vx = (a.tx - p.x) / d * a.sp;
+  ball.vy = (a.ty - p.y) / d * a.sp;
+  p.cd = { pass: 0.35, shot: 0.3, dribble: 0.25, clear: 0.5, trick: 0.3 }[a.type] || 0.3;
+  p.windAct = null;
+  if (a.type === 'pass') {
+    p.stats.pass++;
+    pendingPass = { p, t: a.t, at: simT };
+    a.t.receive = { until: simT + 1.3 };
+    p.runAfter = { until: simT + 1.5 };
+    p.label = a.alt > 15 ? '高空球' : '传球'; p.labelT = 0.7;
+    log(`${nameOf(p)} ${a.alt > 15 ? '高空球' : '传球'} → ${nameOf(a.t)}`, '');
+  } else if (a.type === 'shot') {
+    p.stats.shot++;
+    if (Math.abs(a.ty - GOAL_Y) <= GOAL_H / 2) p.stats.shotOn++;
+    if (p.team === 'A') xgA += a.xg; else xgB += a.xg;
+    p.label = a.alt > 15 ? '挑射' : '射门'; p.labelT = 0.8;
+    log(`${nameOf(p)} ${a.alt > 15 ? '挑射!' : '射门!'}`, '');
+  } else if (a.type === 'dribble') {
+    p.sprint = true;
+    p.lastKnock = simT;
+    p.label = '暴趟'; p.labelT = 0.6;
+    log(`${nameOf(p)} 暴趟!`, '');
+  } else if (a.type === 'clear') {
+    p.patience = 0;
+    p.label = '解围'; p.labelT = 0.8;
+    log(`${nameOf(p)} 解围!`, '');
+  } else if (a.type === 'trick') {
+    // 球已踢向对手侧后;胜负 = 盘带/防守掷骰(身体对抗),胜→防守者踉跄,负→被断
+    const opp = a.opp;
+    opp.cd = Math.max(opp.cd, 0.55);
+    p.stats.trick++;
+    if (Math.random() < 0.5 * p.attrs.dribble / (p.attrs.dribble + opp.attrs.defend) + 0.18) {
+      p.stats.trickOk++;
+      p.sprint = true;
+      opp.stagger = Math.max(opp.stagger, 0.8 * TUN.stag);
+      p.label = '过人'; p.labelT = 0.7;
+      opp.label = '被过'; opp.labelT = 0.7;
+      log(`${nameOf(p)} 过掉 ${nameOf(opp)}!`, 'good');
+    } else {
+      ball.x = opp.x + (p.x - opp.x) / Math.max(1, dist2(opp.x, opp.y, p.x, p.y)) * (PR + BR + 4);
+      ball.y = opp.y + (p.y - opp.y) / Math.max(1, dist2(opp.x, opp.y, p.x, p.y)) * (PR + BR + 4);
+      takeBall(opp);
+      p.stats.lost++;
+      p.cd = Math.max(p.cd, 0.4);
+      p.label = '被断'; p.labelT = 0.7;
+      opp.label = '抢断'; opp.labelT = 0.7;
+      log(`${nameOf(opp)} 抢断 ${nameOf(p)}`, 'bad');
+    }
+  }
 }
 
 // 高空球:空中争顶 → 头球(朝进攻方向顶,带噪声);门将不争顶——由扑救/没收机制处理
@@ -1114,58 +1195,10 @@ function headerCheck() {
   log(`${nameOf(hit)} 头球!`, '');
 }
 
-function doShot(p) {
-  const e = (1 - p.attrs.shoot) * 80;
-  const ty = GOAL_Y + (Math.random() - 0.5) * 2 * e;
-  const d = Math.max(1, dist2(p.x, p.y, goalX(p), ty));
-  const sp = 600 + p.attrs.shoot * 170;
-  ball.ctrl = null;
-  ball.lastTouch = p;
-  ball.vx = (goalX(p) - p.x) / d * sp;
-  ball.vy = (ty - p.y) / d * sp;
-  p.cd = 0.3;
-  p.label = '射门'; p.labelT = 0.8;
-  log(`${nameOf(p)} 射门!`, '');
-}
-
 function sideClear(p, side, opps) {
   const px = p.x + 80 * dirX(p), py = p.y + side * 56;
   for (const o of opps) if (dist2(o.x, o.y, px, py) < 60) return false;
   return true;
-}
-
-function doTrick(p, opp) {
-  const dg = dirX(p);
-  const real = opp;  // pressedBy 已保证返回真实球员
-  p.stats.trick++;
-  const vopps = viewOpps(p);
-  const s1 = sideClear(p, 1, vopps), s2 = sideClear(p, -1, vopps);
-  const side = s1 && s2 ? (Math.random() < 0.5 ? -1 : 1) : s1 ? 1 : -1;
-  const win = Math.random() < 0.5 * p.attrs.dribble / (p.attrs.dribble + real.attrs.defend) + 0.18 + (simT - p.feintAt < 1 ? 0.12 : 0);  // 刚做完假动作 → 对手重心被骗,成功率提升
-  if (win) {
-    ball.ctrl = null;
-    ball.lastTouch = p;
-    ball.x = clamp(real.x + dg * (PR + BR + 14), X0 + BR, X1 - BR);
-    ball.y = clamp(real.y + side * (PR + BR + 10), Y0 + BR, Y1 - BR);
-    const sp = 280 + 60 * p.attrs.speed;
-    const d = Math.max(1, dist2(p.x, p.y, ball.x, ball.y));
-    ball.vx = (ball.x - p.x) / d * sp;
-    ball.vy = (ball.y - p.y) / d * sp;
-    p.sprint = true;
-    real.cd = Math.max(real.cd, 0.55);
-    real.stagger = Math.max(real.stagger, 0.8 * TUN.stag);  // 过干净:防守者踉跄,追不上也封堵不了
-    p.stats.trickOk++;
-    p.label = '过人'; p.labelT = 0.7;
-    real.label = '被过'; real.labelT = 0.7;
-    log(`${nameOf(p)} 过掉 ${nameOf(real)}!`, 'good');
-  } else {
-    takeBall(real);
-    p.stats.lost++;
-    p.cd = 0.4;
-    p.label = '被断'; p.labelT = 0.7;
-    real.label = '抢断'; real.labelT = 0.7;
-    log(`${nameOf(real)} 抢断 ${nameOf(p)}`, 'bad');
-  }
 }
 
 // ============ 物理驱动层(力场 + 斥力 + 惯性) ============
@@ -1192,8 +1225,7 @@ function step(dt) {
         p.target = null; p.thrust = 0;
         if (p.windup <= 0) {
           p.windup = 0;
-          if (p.windAct && p.windAct.type === 'pass') firePass(p);
-          else if (p.windAct && p.windAct.type === 'shot') fireShot(p);
+          if (p.windAct) fireKick(p);
         }
       } else { p.windup = 0; p.windAct = null; }
     }
