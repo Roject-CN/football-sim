@@ -289,7 +289,7 @@ function makePlayer(team, idx, anchor) {
     action: '', label: '', labelT: 0, tlab: '',
     facing: team === 'A' ? 0 : Math.PI,
     mem: null, view: null, viewAt: -1, patience: 0,
-    runAfter: null, feintAt: -10, isGK: false, gkDive: null,
+    runAfter: null, feintAt: -10, isGK: false, gkDive: null, protected: 0,
     react: 0.09 + Math.random() * 0.08, decideAt: Math.random() * 0.1
   };
 }
@@ -850,6 +850,7 @@ function decide(p) {
       deadBall = null;
       takeBall(p);
       p.cd = 0.3;
+      p.protected = simT + (isThrow ? 0.8 : 1.2);  // 发球保护期:不会被立刻抢
       p.label = isThrow ? '发球' : '开球';
       p.labelT = 0.6;
       return;
@@ -1258,8 +1259,8 @@ function step(dt) {
       } else { p.windup = 0; p.windAct = null; }
     }
 
-    // 控球者被贴身:减速 + 可能被抢断(触觉感知——被贴着不用看);门将手拿球除外,无人能抢
-    if (ball.ctrl === p && !p.isGK) {
+    // 控球者被贴身:减速 + 可能被抢断(触觉感知);门将手拿球/发球保护期内无人能抢
+    if (ball.ctrl === p && !p.isGK && simT >= p.protected) {
       const opp = touchOpps(p, 56)[0] || null;
       if (opp) {
         const d = dist2(p.x, p.y, opp.x, opp.y);
@@ -1500,8 +1501,8 @@ function goalKick(team) {
 }
 
 function kickoffPositions() {
-  playersA.forEach((p, i) => { const a = p.isGK ? p.anchor : anchorsFor('A', playersA.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.feintAt = -10; p.gkDive = null; });
-  playersB.forEach((p, i) => { const a = p.isGK ? p.anchor : anchorsFor('B', playersB.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.feintAt = -10; p.gkDive = null; });
+  playersA.forEach((p, i) => { const a = p.isGK ? p.anchor : anchorsFor('A', playersA.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.feintAt = -10; p.gkDive = null; p.protected = 0; });
+  playersB.forEach((p, i) => { const a = p.isGK ? p.anchor : anchorsFor('B', playersB.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.feintAt = -10; p.gkDive = null; p.protected = 0; });
   ball.x = (X0 + X1) / 2; ball.y = GOAL_Y; ball.vx = 0; ball.vy = 0; ball.alt = 0; ball.altV = 0;
   ball.ctrl = null; ball.lastTouch = null; ball.saveGK = null; ball.dead = false;
   deadBall = null;
