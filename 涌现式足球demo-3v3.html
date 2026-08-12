@@ -168,7 +168,7 @@
       <button id="btnExport">导出日志</button>
     </div>
   </div>
-  <canvas id="cv" width="960" height="500"></canvas>
+  <canvas id="cv" width="960" height="600"></canvas>
   <div id="tlm">
     <table>
       <thead><tr><th>时间</th><th>球员</th><th>动作</th><th>位置 X</th><th>位置 Y</th><th>力 Fx</th><th>力 Fy</th><th>|F|</th><th>速度</th><th>踉跄</th></tr></thead>
@@ -214,10 +214,10 @@
 // ============ 画布 / 常量 ============
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
-const W = 960, H = 500;
-const X0 = 40, X1 = 920, Y0 = 30, Y1 = 470;   // 球场边界
+const W = 960, H = 600;
+const X0 = 40, X1 = 920, Y0 = 30, Y1 = 570;   // 球场边界
 const PR = 16, BR = 8;                        // 球员 / 球半径
-const GOAL_Y = H / 2, GOAL_H = 90;            // 球门
+const GOAL_Y = H / 2, GOAL_H = 100;           // 球门
 const HEAT_COLS = 22, HEAT_ROWS = 11;         // 热区网格
 const teamName = { A: '红', B: '蓝' };
 const teamColor = { A: '#f85149', B: '#58a6ff' };
@@ -256,7 +256,7 @@ function teamCount(team) {
 function anchorsFor(team, n) {
   const L = X1 - X0;
   const arr = [{ x: X0 + L * (team === 'A' ? 0.22 : 0.78), y: GOAL_Y }];
-  const offs = [-120, 120, -60, 60, 0, -180, 180];
+  const offs = [-150, 150, -75, 75, 0, -225, 225];
   for (let i = 1; i < n; i++) {
     const tier = Math.floor((i - 1) / 2);
     arr.push({ x: X0 + L * (team === 'A' ? 0.45 + tier * 0.06 : 0.55 - tier * 0.06), y: GOAL_Y + offs[i - 1] });
@@ -536,7 +536,7 @@ function clearShot(p, opps) {
   const g = goalX(p), gd = Math.abs(g - p.x);
   for (const o of opps) {
     const dx = o.x - p.x;
-    if (dx * dg > 0 && Math.abs(dx) < gd * 0.8 && Math.abs(o.y - p.y) < 85) return false;
+    if (dx * dg > 0 && Math.abs(dx) < gd * 0.8 && Math.abs(o.y - p.y) < 105) return false;
   }
   return true;
 }
@@ -547,7 +547,7 @@ function seekTarget(p, tx, ty, F) {
 }
 
 // ============ 空间价值定位(B 部分核心) ============
-const laneY = (p) => [GOAL_Y, GOAL_Y - 110, GOAL_Y + 110][p.idx % 3];
+const laneY = (p) => [GOAL_Y, GOAL_Y - 135, GOAL_Y + 135][p.idx % 3];
 
 function lineDist(ax, ay, bx, by, px, py) {
   const dx = bx - ax, dy = by - ay;
@@ -573,7 +573,7 @@ function supportPositioning(p) {
   const fast = transT[p.team] > 0;  // 反击爆发:更深的前插 + 冲刺
   const sd = fast ? TUN.sDepth * 1.35 : TUN.sDepth;
   const xC = [holder.x + dg * -45 * sd, holder.x + dg * 40 * sd, holder.x + dg * 100 * sd, holder.x + dg * 155 * sd, holder.x + dg * 210 * sd];
-  const yC = [GOAL_Y - 165, GOAL_Y - 82, GOAL_Y, GOAL_Y + 82, GOAL_Y + 165];
+  const yC = [GOAL_Y - 200, GOAL_Y - 100, GOAL_Y, GOAL_Y + 100, GOAL_Y + 200];
   const vopps = viewOpps(p);
   const commit = clamp(((p.x - ownGoalX(p)) * dg) / 800, 0, 1);  // 压上程度(丢球后被反击的暴露)
   const Loss = 0.4 + 0.6 * commit;
@@ -587,8 +587,8 @@ function supportPositioning(p) {
     const channel = passLineClear(holder.x, holder.y, x, y, vopps) ? 1 : 0;
     const P = clamp(0.25 + 0.5 * channel * (TUN.wc / 0.3) + 0.2 * openN, 0.05, 0.95);  // 可达性
     const prog = clamp(((x - ball.x) * dg + 100) / 400, 0, 1);
-    const width = clamp(Math.abs(y - holder.y) / 220, 0, 1);
-    const lane = 1 - clamp(Math.abs(y - laneY(p)) / 220, 0, 1);
+    const width = clamp(Math.abs(y - holder.y) / 260, 0, 1);
+    const lane = 1 - clamp(Math.abs(y - laneY(p)) / 260, 0, 1);
     // 创造空间:站两个防守者之间(把他们拉散)
     let creation = 0;
     if (vopps.length >= 2) {
@@ -612,7 +612,7 @@ function defLinePositioning(p) {
   const lineX = clamp(holder.x + (ownGoalX(p) - holder.x) * TUN.dLine * (matePressing ? 0.92 : 1), X0 + PR + 6, X1 - PR - 6);
   const vopps = viewOpps(p);
   let best = null, bs = -1e9;
-  for (const cy0 of [GOAL_Y - 165, GOAL_Y - 82, GOAL_Y, GOAL_Y + 82, GOAL_Y + 165]) {
+  for (const cy0 of [GOAL_Y - 200, GOAL_Y - 100, GOAL_Y, GOAL_Y + 100, GOAL_Y + 200]) {
     const y = clamp(cy0, Y0 + PR + 6, Y1 - PR - 6);
     let open = 1e9;
     for (const o of vopps) open = Math.min(open, dist2(lineX, y, o.x, o.y));
@@ -621,8 +621,8 @@ function defLinePositioning(p) {
       if (lineDist(holder.x, holder.y, o.x, o.y, lineX, y) < 26) deny += 0.5;
     }
     // 协防补位:队友上抢时,其余人向球侧收紧,防止被一过全过
-    const cover = matePressing ? 0.15 * (1 - clamp(Math.abs(y - ball.y) / 200, 0, 1)) : 0;
-    const s = TUN.dOpen * clamp(open / 100, 0, 1) + TUN.dDeny * clamp(deny, 0, 1) + TUN.dLane * (1 - clamp(Math.abs(y - laneY(p)) / 200, 0, 1)) + cover;
+    const cover = matePressing ? 0.15 * (1 - clamp(Math.abs(y - ball.y) / 240, 0, 1)) : 0;
+    const s = TUN.dOpen * clamp(open / 100, 0, 1) + TUN.dDeny * clamp(deny, 0, 1) + TUN.dLane * (1 - clamp(Math.abs(y - laneY(p)) / 240, 0, 1)) + cover;
     if (s > bs) { bs = s; best = { x: lineX, y }; }
   }
   p.target = best; p.thrust = 430; p.action = '回防';
@@ -633,11 +633,11 @@ function recoverPositioning(p) {
   const tx = clamp((ownGoalX(p) + ball.x) / 2, X0 + PR + 6, X1 - PR - 6);
   const vopps = viewOpps(p);
   let best = null, bs = -1e9;
-  for (const cy0 of [GOAL_Y - 165, GOAL_Y - 82, GOAL_Y, GOAL_Y + 82, GOAL_Y + 165]) {
+  for (const cy0 of [GOAL_Y - 200, GOAL_Y - 100, GOAL_Y, GOAL_Y + 100, GOAL_Y + 200]) {
     const y = clamp(cy0, Y0 + PR + 6, Y1 - PR - 6);
     let open = 1e9;
     for (const o of vopps) open = Math.min(open, dist2(tx, y, o.x, o.y));
-    const s = 0.6 * (1 - clamp(Math.abs(y - laneY(p)) / 200, 0, 1)) + 0.4 * clamp(open / 120, 0, 1);
+    const s = 0.6 * (1 - clamp(Math.abs(y - laneY(p)) / 240, 0, 1)) + 0.4 * clamp(open / 120, 0, 1);
     if (s > bs) { bs = s; best = { x: tx, y }; }
   }
   p.target = best; p.thrust = 400; p.action = '补位';
@@ -914,8 +914,8 @@ function doShot(p) {
 }
 
 function sideClear(p, side, opps) {
-  const px = p.x + 80 * dirX(p), py = p.y + side * 46;
-  for (const o of opps) if (dist2(o.x, o.y, px, py) < 50) return false;
+  const px = p.x + 80 * dirX(p), py = p.y + side * 56;
+  for (const o of opps) if (dist2(o.x, o.y, px, py) < 60) return false;
   return true;
 }
 
@@ -1301,7 +1301,7 @@ function draw() {
   ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo((X0 + X1) / 2, Y0); ctx.lineTo((X0 + X1) / 2, Y1); ctx.stroke();
   ctx.beginPath(); ctx.arc((X0 + X1) / 2, GOAL_Y, 40, 0, Math.PI * 2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(X0, GOAL_Y - 170); ctx.lineTo(X1, GOAL_Y - 170); ctx.moveTo(X0, GOAL_Y + 170); ctx.lineTo(X1, GOAL_Y + 170); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(X0, GOAL_Y - 210); ctx.lineTo(X1, GOAL_Y - 210); ctx.moveTo(X0, GOAL_Y + 210); ctx.lineTo(X1, GOAL_Y + 210); ctx.stroke();
 
   for (const g of [{ x: X0, c: teamColor.A }, { x: X1, c: teamColor.B }]) {
     ctx.fillStyle = 'rgba(255,255,255,.10)';

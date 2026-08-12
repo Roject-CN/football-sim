@@ -51,7 +51,7 @@ function makeCtx() {
 }
 function makeEl() {
   return {
-    textContent: '', innerHTML: '', style: {}, checked: false,
+    textContent: '', innerHTML: '', style: {}, checked: false, value: '3', dataset: {},
     classList: { add() {}, remove() {} },
     children: [], lastChild: { remove() {} },
     prepend() {}, appendChild() {}, addEventListener() {},
