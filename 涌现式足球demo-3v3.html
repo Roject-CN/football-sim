@@ -879,6 +879,8 @@ function decide(p) {
     if (p.cd > 0 || p.windup > 0) return;
     const gc = { x: goalX(p), y: GOAL_Y };
     const gDist = dist2(p.x, p.y, gc.x, gc.y);
+    // 己方门前 100px 内拿到球:不玩火,直接解围(杜绝自家门口带球)
+    if (Math.abs(p.x - ownGoalX(p)) < 100 && gDist > 320) { clearBall(p); return; }
     const vopps = viewOpps(p);
     const opp = pressedBy(p, vopps);
     const clear = clearShot(p, vopps);
@@ -954,18 +956,27 @@ function decide(p) {
         if (uB > passU) { passU = uB; passT = t; passLoft = false; }
         continue;
       }
+      if (t.isGK) {
+        // 回传门将:压力越大越有价值(安全出口),压力小则几乎不选
+        const uB = (0.15 + 0.55 * pressF) * 0.9 * TUN.pass + (Math.random() - 0.5) * 0.05;
+        if (uB > passU) { passU = uB; passT = t; passLoft = false; }
+        continue;
+      }
       // 预测落点:按飞行时间领到接球者的跑动位置——传跑结合
       const dd = Math.max(1, dist2(p.x, p.y, t.x, t.y));
       const Tf = dd / clamp(dd * 2.0, 300, 540);
       const ptx = clamp(t.x + t.vx * Tf, X0 + 24, X1 - 24);
       const pty = clamp(t.y + t.vy * Tf, Y0 + 24, Y1 - 24);
+      const isBackPass = t.isGK ? false : ((t.x - p.x) * dg < 0);  // 回传(朝己方门方向)
       const progN = clamp((((ptx - p.x) * dg) + 200) / 400, 0, 1.2);
       let open = true;
       for (const o of vopps) if (dist2(o.x, o.y, ptx, pty) < 55) open = false;
       const chan = passLineClear(p.x, p.y, ptx, pty, vopps) ? 1 : 0;
       const succG = (open ? 0.85 : 0.35) * (0.6 + 0.4 * chan);
       const counterB = transT[p.team] > 0 ? 1.4 : 1;  // 反击中直塞优先(略降,给带球冲击留空间)
-      const u = progN * succG * TUN.pass * counterB + (Math.random() - 0.5) * 0.05;
+      // 回传己方半场的球:精度要求更高(自家门口不许乱传)
+      const backMul = isBackPass ? 0.65 : 1;
+      const u = progN * succG * TUN.pass * counterB * backMul + (Math.random() - 0.5) * 0.05;
       if (u > passU) { passU = u; passT = t; passLoft = false; }
       // 高空球:通道被挡时价值骤升,可越过拦截;倍率随 loft 倾向平滑缩放
       const succL = 0.55 * (0.5 + 0.5 * (1 - chan));
@@ -1050,8 +1061,9 @@ function decide(p) {
 
 // 蓄力:准备时间与力度成正比,且随压力缩短——空间足=从容出脚(更准),被逼=仓促出脚(更糙)
 function startPass(p, t, loft, pressF) {
-  // 误差随压力放大(被逼=仓促传,精度下降),但整体收窄
-  const e = (1 - p.attrs.pass) * 45 * (1 + 1.2 * pressF);
+  // 误差随压力放大(被逼=仓促传,精度下降),回传己方半场/门将的球误差减半
+  const isBack = t.isGK || ((t.x - p.x) * dirX(p) < 0);
+  const e = (1 - p.attrs.pass) * 45 * (1 + 1.2 * pressF) * (isBack ? 0.5 : 1);
   // 与决策层一致:传预测落点(接球者位置 + 速度×飞行时间)
   const d0 = Math.max(1, dist2(p.x, p.y, t.x, t.y));
   const Tf = d0 / clamp(d0 * 2.0, 300, 540);
@@ -1060,7 +1072,8 @@ function startPass(p, t, loft, pressF) {
   const tx = clamp(ptx + (Math.random() - 0.5) * 2 * e, X0 + 24, X1 - 24);
   const ty = clamp(pty + (Math.random() - 0.5) * 2 * e, Y0 + 24, Y1 - 24);
   const d = Math.max(1, dist2(p.x, p.y, tx, ty));
-  const sp = loft ? clamp(d * 1.9, 300, 520) : clamp(d * 2.0, 300, 540);
+  // 门将目标:球速保底 380(回传要够快,不能被慢吞吞滚进自家门)
+  const sp = loft ? clamp(d * 1.9, 300, 520) : clamp(Math.max(d * 2.0, t.isGK ? 380 : 300), 300, 540);
   const power = clamp((sp - 300) / 300, 0, 1);
   p.windup = TUN.wind * (0.06 + 0.30 * power) * (1 - 0.45 * pressF);  // 被逼→仓促出球
   p.windAct = { type: 'pass', t, loft, tx, ty, sp, errMul: 1 + 2 * pressF };  // 被逼→精度下降
@@ -1410,7 +1423,7 @@ function step(dt) {
       // 慢球:门将优先(禁区内可用手)
       let gkNear = null;
       for (const g of [gkOf('A'), gkOf('B')]) {
-        if (g && dist2(g.x, g.y, ball.x, ball.y) < PR + BR + 14) { gkNear = g; break; }
+        if (g && dist2(g.x, g.y, ball.x, ball.y) < PR + BR + 26) { gkNear = g; break; }  // 门将没收半径扩大
       }
       if (gkNear) takeBall(gkNear);
       else {
