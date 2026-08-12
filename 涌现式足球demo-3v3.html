@@ -753,8 +753,8 @@ function gkDecide(p, pb, dg) {
   const gkx = ownGoalX(p);
   const distToGoal = Math.abs(ball.x - gkx);
   const bspd = Math.hypot(pb.vx, pb.vy);
-  // 扑救:球快速飞向己方球门窗口 → 扑向预测进门点(记忆层同款外推)
-  if (bspd > 160 && ball.vx * dg < 0) {
+  // 扑救:球飞向己方球门窗口(含高空球/头球/飘球)→ 扑向预测进门点(记忆层同款外推)
+  if (bspd > 100 && ball.vx * dg < 0) {
     const tLine = (gkx - ball.x) / ball.vx;
     if (tLine > 0 && tLine < 1.1) {
       const crossY = ball.y + ball.vy * tLine;
@@ -1167,13 +1167,13 @@ function clearBall(p) {
   log(`${nameOf(p)} 解围!`, '');
 }
 
-// 高空球:空中争顶 → 头球(朝进攻方向顶,带噪声)
+// 高空球:空中争顶 → 头球(朝进攻方向顶,带噪声);门将不争顶——由扑救/没收机制处理
 function headerCheck() {
   if (ball.headCd > 0) return;
   if (ball.alt < 20 || ball.alt > 90) return;
   let hd = 1e9, hit = null;
   for (const p of allPlayers()) {
-    if (p === ball.lastTouch) continue;
+    if (p === ball.lastTouch || p.isGK) continue;  // 门将直接没收/扑出,不参与头球
     const d = dist2(ball.x, ball.y, p.x, p.y);
     if (d < PR + BR + 16 && d < hd) { hd = d; hit = p; }
   }
@@ -1365,8 +1365,8 @@ function step(dt) {
       if (ball.alt <= 0) { ball.alt = 0; ball.altV = 0; }
     }
 
-    // 门将扑救(先于进球判定;快速飞向球门的球才触发,门将须在有效覆盖内)
-    if (Math.hypot(ball.vx, ball.vy) > 160) {
+    // 门将扑救(先于进球判定;朝球门飞来的球都触发——含高空球/头球/飘球,门将须在有效覆盖内)
+    if (Math.hypot(ball.vx, ball.vy) > 100) {
       if (ball.vx < 0) { const gk = gkOf('A'); if (gk && gkSave(gk)) return; }
       else if (ball.vx > 0) { const gk = gkOf('B'); if (gk && gkSave(gk)) return; }
     }
