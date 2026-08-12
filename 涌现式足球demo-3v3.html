@@ -760,16 +760,30 @@ function gkDecide(p, pb, dg) {
       }
     }
   }
-  // 出击:门前危险区自由球/对方带球,且我有把握先到
+  // 出击:门前危险区,且"读场"后认为值得出击——队友已覆盖就不出去,留门线
   if (distToGoal < 230) {
     const myD = dist2(p.x, p.y, ball.x, ball.y);
-    let oppD = 1e9;
-    for (const o of oppsOf(p)) oppD = Math.min(oppD, dist2(o.x, o.y, ball.x, ball.y));
-    if (ball.ctrl === null || (ball.ctrl.team !== p.team && myD < oppD + 40)) {
-      seekTarget(p, pb.x, pb.y, 860);
-      p.sprint = true;
-      p.action = '出击';
-      return;
+    // 读场:队友比我更近,或已站住"球→门中心"线路 → 不出击
+    let mateCover = false;
+    for (const m of matesOf(p)) {
+      if (m === p || m.isGK) continue;
+      if (dist2(m.x, m.y, ball.x, ball.y) < myD - 25) { mateCover = true; break; }
+      if (lineDist(gkx, GOAL_Y, ball.x, ball.y, m.x, m.y) < 40 &&
+          dist2(m.x, m.y, gkx, GOAL_Y) < dist2(p.x, p.y, gkx, GOAL_Y)) { mateCover = true; break; }
+    }
+    if (!mateCover) {
+      const oppHas = ball.ctrl && ball.ctrl.team !== p.team;                                  // 对方持球
+      const looseNear = ball.ctrl === null && Math.abs(ball.x - gkx) < 230 && ball.vx * dg >= -30;  // 门前自由球且未被清走
+      if (oppHas || looseNear) {
+        let oppD = 1e9;
+        for (const o of oppsOf(p)) oppD = Math.min(oppD, dist2(o.x, o.y, ball.x, ball.y));
+        if (myD < oppD + 40) {
+          seekTarget(p, pb.x, pb.y, 860);
+          p.sprint = true;
+          p.action = '出击';
+          return;
+        }
+      }
     }
   }
   // 选位:站"球→门中心"连线,球越近越适度前压(在禁区内活动,不贴底线)
