@@ -802,7 +802,7 @@ function gkDecide(p, pb, dg) {
   p.action = depth > 0.35 ? '封角度' : '选位';
 }
 
-// 门将开大脚:找推进最深的队友,或往纵深空旷处(高空球)
+// 门将开大脚:优先找中路的队友(避开边线),球速按"落点=目标"反推,绝不飞出边线
 function gkKick(p) {
   const dg = dirX(p);
   let best = null, bs = -1e9;
@@ -810,16 +810,22 @@ function gkKick(p) {
     if (t === p || t.isGK) continue;
     const prog = (t.x - p.x) * dg;
     const d = Math.max(1, dist2(p.x, p.y, t.x, t.y));
-    const u = prog / 400 - d / 1400 + Math.random() * 0.25;
+    const central = 1 - Math.abs(t.y - GOAL_Y) / 260;  // 中路优先,边路惩罚
+    const u = prog / 400 - d / 1400 + central * 0.4 + Math.random() * 0.2;
     if (u > bs) { bs = u; best = t; }
   }
   let tx, ty;
   if (best) { tx = best.x + best.vx * 0.6; ty = best.y + best.vy * 0.6; }
-  else { tx = clamp(p.x + dg * 500, X0 + 30, X1 - 30); ty = GOAL_Y + (Math.random() - 0.5) * 160; }
+  else { tx = p.x + dg * 420; ty = GOAL_Y + (Math.random() - 0.5) * 100; }
+  // 目标必须落在场内安全区(离所有边线留 90px 余量)
+  tx = clamp(tx, X0 + 90, X1 - 90);
+  ty = clamp(ty, Y0 + 90, Y1 - 90);
   const d = Math.max(1, dist2(p.x, p.y, tx, ty));
   ball.ctrl = null; ball.lastTouch = p;
   ball.alt = 40; ball.altV = clamp(d * 0.8, 260, 360);
-  const sp = clamp(d * 1.7, 350, 520);   // 开球力度适中:落点在中前场,队友可控
+  // 球速按落点反推:空中阻力 0.32,飞行时间 T=2×altV/350 → 球刚好落在目标处
+  const T = (2 * ball.altV) / 350;
+  const sp = Math.max(300, d / ((1 - Math.exp(-0.32 * T)) / 0.32));
   ball.vx = (tx - p.x) / d * sp;
   ball.vy = (ty - p.y) / d * sp;
   p.cd = 0.6;
@@ -1044,8 +1050,8 @@ function decide(p) {
 
 // 蓄力:准备时间与力度成正比,且随压力缩短——空间足=从容出脚(更准),被逼=仓促出脚(更糙)
 function startPass(p, t, loft, pressF) {
-  // 误差随压力放大:被逼=仓促传,精度下降(失误的量化)
-  const e = (1 - p.attrs.pass) * 60 * (1 + 2 * pressF);
+  // 误差随压力放大(被逼=仓促传,精度下降),但整体收窄
+  const e = (1 - p.attrs.pass) * 45 * (1 + 1.2 * pressF);
   // 与决策层一致:传预测落点(接球者位置 + 速度×飞行时间)
   const d0 = Math.max(1, dist2(p.x, p.y, t.x, t.y));
   const Tf = d0 / clamp(d0 * 2.0, 300, 540);
