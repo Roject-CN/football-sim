@@ -274,14 +274,14 @@ const aiVerOf = (p) => AI_VER[p.team];
 
 // 力场参数(Step1 默认值,后续进调参面板)
 const FT = {
-  homeStr: 260, homeShift: 0.5, ballStr: 220, goalStr: 320,
-  structK: 0.5, structR: 110, markBase: 170,
-  spaceStr: 300, spaceBW: 70, spaceAspect: 1.6, chanStr: 180,
-  aggro: 1, recoverRate: 1.2
+  homeStr: 260, homeShift: 0.5, ballStr: 260, goalStr: 320,
+  structK: 0.5, structR: 110, markBase: 240,
+  spaceStr: 300, spaceBW: 70, spaceAspect: 1.6, chanStr: 210,
+  aggro: 1, recoverRate: 2.5
 };
 // 攻/防权重模板:职责 = 权重投影,同一范式(0~1,乘各力强度)
-const W_ATT = { home: 0.35, ball: 0.35, goal: 0, struct: 0.3, mark: 0, space: 0.85, chan: 0.8 };
-const W_DEF = { home: 1, ball: 1, goal: 1, struct: 0.8, mark: 0.55, space: 0.2, chan: 0 };
+const W_ATT = { home: 0.35, ball: 0.35, goal: 0, struct: 0.3, mark: 0, space: 0.8, chan: 1 };
+const W_DEF = { home: 1, ball: 1, goal: 1, struct: 0.8, mark: 0.8, space: 0.2, chan: 0 };
 
 function randAttr() { return 0.65 + Math.random() * 0.7; }
 
@@ -985,12 +985,13 @@ function decide(p) {
 // 七力:阵型(锚点随球平移)/球引力/门保护/结构弹簧(补防换位涌现)/盯人/空位(方向采样密度场)/通道。
 // 攻防 = 权重模板投影(W_ATT/W_DEF),转换按 recoverRate 平滑,中场/边路/盯人全靠权重差异涌现。
 
-// 空位力:12 方向采样,每方向评估"对手密度+攻击方向偏好",按低密度加权平均取方向
+// 空位力:前方 ±120° 内 12 方向采样(人主要看前方),每方向评估"对手密度+前插偏好",加权平均取方向
 function fieldSpace(p, vopps, dist, aspect, attackBias) {
   const N = 12, dg = dirX(p);
+  const base = dg > 0 ? 0 : Math.PI;   // 攻击方向角
   let bx = 0, by = 0, bw = 0;
   for (let i = 0; i < N; i++) {
-    const ang = (i / N) * Math.PI * 2;
+    const ang = base + (i / (N - 1) - 0.5) * (2.4);  // ±120°
     const sx = p.x + Math.cos(ang) * dist;
     const sy = p.y + Math.sin(ang) * dist;
     let den = 1e-6;
@@ -998,9 +999,9 @@ function fieldSpace(p, vopps, dist, aspect, attackBias) {
       const dx = (sx - o.x) / FT.spaceBW, dy = (sy - o.y) / (FT.spaceBW * FT.spaceAspect);
       den += Math.exp(-(dx * dx + dy * dy) / 2);
     }
-    // 攻击方向偏好(仅攻态):朝对方球门方向加分
+    // 前插偏好(仅攻态):越靠近对方球门方向权重越高
     const fwd = clamp(((sx - p.x) * dg) / dist, 0, 1) * attackBias;
-    const w = 1 / (den + 0.15) + fwd * 2;
+    const w = 1 / (den + 0.15) + fwd * 3;
     bx += Math.cos(ang) * w; by += Math.sin(ang) * w; bw += w;
   }
   if (bw > 0) { bx /= bw; by /= bw; }
@@ -1031,22 +1032,27 @@ function fieldDrive(p) {
     const s = FT.homeStr * clamp(d / 320, 0, 1) * mix('home');
     fx += (ax - p.x) / d * s; fy += (ay - p.y) / d * s;
   }
-  // 2. 球引力:防守拉向球(近强远弱——最近者自然扑球,涌现逼抢),进攻拉向球前方接应点
+  // 2. 球引力:防守拉向球(近强远弱——最近者自然扑球,涌现逼抢;靠近持球者时压过门保护),
+  //    进攻拉向球前方接应点
   {
     const tx = holder ? holder.x + dg * 110 * wa : ball.x;
     const ty = holder ? holder.y : ball.y;
     const d = Math.max(1, dist2(p.x, p.y, tx, ty));
-    const s = FT.ballStr * (0.25 + 0.75 * clamp(1 - d / 420, 0, 1)) * (0.6 + 0.8 * FT.aggro) * mix('ball');
+    const nearF = 0.15 + 0.85 * clamp(1 - d / 350, 0, 1);   // 最近者≈1,远处≈0.15
+    const s = FT.ballStr * nearF * (0.6 + 0.8 * FT.aggro) * mix('ball');
     fx += (tx - p.x) / d * s; fy += (ty - p.y) / d * s;
   }
-  // 3. 门保护:站"球→己方门"线上(防线深度用 TUN.dLine)
+  // 3. 门保护:站"球→己方门"线上,按车道分散(防 3 人抱团中路,边路留人);
+  //    自己贴近持球者时门保护自动让位给球引力(贴身逼抢优先于站线)
   {
     const gkx = ownGoalX(p);
     const lx = clamp(gkx + (ball.x - gkx) * TUN.dLine, X0 + PR + 6, X1 - PR - 6);
-    const ly = clamp(GOAL_Y + (ball.y - GOAL_Y) * 0.5, Y0 + PR + 6, Y1 - PR - 6);
+    const ly = clamp(laneY(p) + (ball.y - GOAL_Y) * 0.3, Y0 + PR + 6, Y1 - PR - 6);
     const d = Math.max(1, dist2(p.x, p.y, lx, ly));
     const near = Math.abs(ball.x - gkx) < 430 ? 1 : 0.25;
-    const s = FT.goalStr * near * mix('goal');
+    const dBall = Math.max(1, dist2(p.x, p.y, ball.x, ball.y));
+    const letGo = clamp(dBall / 220, 0, 1);   // 离球<220px 时门保护让位
+    const s = FT.goalStr * near * mix('goal') * (0.3 + 0.7 * letGo);
     fx += (lx - p.x) / d * s; fy += (ly - p.y) / d * s;
   }
   // 4. 结构弹簧:与队友保持目标间距(队友离位→缺口→弹簧拉补,换位/补防涌现)
@@ -1060,7 +1066,8 @@ function fieldDrive(p) {
       }
     }
   }
-  // 5. 盯人力:最近进攻者(防守侧为主;盯人力 > 阵型力时自然被跑位带走)
+  // 5. 盯人力:最近进攻者——站"进攻者与球连线中点"(封堵接球线路,涌现版 deny),
+  //    盯人力 > 阵型力时自然被跑位带走
   {
     let nb = null, nd = 1e9;
     for (const o of vopps) {
@@ -1069,35 +1076,43 @@ function fieldDrive(p) {
     }
     if (nb) {
       const d = Math.max(1, nd);
-      const s = FT.markBase * clamp(1 - d / 320, 0.1, 1) * mix('mark') * (0.5 + 0.5 * FT.aggro);
-      fx += (nb.x - p.x) / d * s; fy += (nb.y - p.y) / d * s;
+      const s = FT.markBase * clamp(1 - d / 340, 0.1, 1) * mix('mark') * (0.5 + 0.5 * FT.aggro);
+      // 封堵点:进攻者与球连线的中点(贴球侧 60%)
+      const mx2 = nb.x + (ball.x - nb.x) * 0.6;
+      const my2 = nb.y + (ball.y - nb.y) * 0.6;
+      const dm = Math.max(1, dist2(p.x, p.y, mx2, my2));
+      fx += (mx2 - p.x) / dm * s; fy += (my2 - p.y) / dm * s;
     }
   }
   // 6. 空位力:方向采样密度场(采样距离随状态:反击最远,防守最短)
   {
-    const dist = fast ? 230 : (wd > 0.5 ? 110 : 150);
+    const dist = fast ? 240 : (wd > 0.5 ? 110 : 200);
     const sv = fieldSpace(p, vopps, dist, FT.spaceAspect, wa);
     const s = FT.spaceStr * (0.35 + 0.65 * wa) * (fast ? 1.4 : 1) * mix('space');
     fx += sv.x * s; fy += sv.y * s;
   }
-  // 7. 通道力:靠近持球者到接应距离(攻态)
+  // 7. 通道力(攻态):接应环带弹簧——只校正与持球者的前后距离(站持球者前方 ~115px 纵深),
+  //    横向留给空间力拉开(不锁 y,避免接应扎堆)
   if (holder && holder.team === p.team) {
-    const d = Math.max(1, dist2(p.x, p.y, holder.x, holder.y));
-    if (d > 90) {
-      const s = FT.chanStr * clamp((d - 90) / 150, 0, 1) * mix('chan');
-      fx += (holder.x - p.x) / d * s; fy += (holder.y - p.y) / d * s;
-    }
+    const cx = holder.x + dg * 115;
+    const d = Math.max(1, dist2(p.x, p.y, cx, p.y));
+    const err = d - 60;  // 理想接应纵深差
+    const s = FT.chanStr * clamp(Math.abs(err) / 140, 0, 1) * (err > 0 ? 1 : -1) * mix('chan');
+    fx += (cx - p.x) / d * s; fy += 0;
   }
 
   const mag = Math.hypot(fx, fy);
   if (mag > 8) {
     const d = Math.min(170, 60 + mag / 5);
-    p.target = {
-      x: clamp(p.x + fx / mag * d, X0 + PR + 4, X1 - PR - 4),
-      y: clamp(p.y + fy / mag * d, Y0 + PR + 4, Y1 - PR - 4)
-    };
+    const tx = clamp(p.x + fx / mag * d, X0 + PR + 4, X1 - PR - 4);
+    const ty = clamp(p.y + fy / mag * d, Y0 + PR + 4, Y1 - PR - 4);
+    // 目标低通:平滑跑位,避免每 0.15s 变向——队友能传到你(传球预测落点才追得上)
+    if (!p.ftx) { p.ftx = tx; p.fty = ty; }
+    else { p.ftx += (tx - p.ftx) * 0.35; p.fty += (ty - p.fty) * 0.35; }
+    p.target = { x: clamp(p.ftx, X0 + PR + 4, X1 - PR - 4), y: clamp(p.fty, Y0 + PR + 4, Y1 - PR - 4) };
     p.thrust = clamp(300 + mag * 0.55, 380, 820);
-    p.sprint = fast || (mag > 700 && wa > 0.5);
+    const dBall = Math.max(1, dist2(p.x, p.y, ball.x, ball.y));
+    p.sprint = fast || (mag > 700 && wa > 0.5) || (wd > 0.5 && dBall < 230);  // 防态贴身扑球冲刺
   }
   p.action = wd > 0.5 ? (fast ? '反击跑位' : '防守站位') : (fast ? '反击跑位' : '进攻跑位');
 }
