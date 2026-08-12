@@ -1043,6 +1043,18 @@ function fieldDrive(p) {
   const spaceOn = phase === 'att' ? 1 : (phase === 'loose' ? 0.5 : 0.08);
   const chanOn = phase === 'att' ? 1 : 0;
 
+  // 主控层:扑球资格状态机——防守/自由球时,离球最近的无球球员有扑球资格(冲刺扑抢),
+  // 其余人球引力降为"封堵位"(站球与己方门连线,封锁直塞/射门)——防三人齐扑,分工涌现
+  let presser = false;
+  if (phase !== 'att') {
+    let closer = 0;
+    for (const m of matesOf(p)) {
+      if (m === p || m.isGK) continue;
+      if (dist2(m.x, m.y, ball.x, ball.y) < dist2(p.x, p.y, ball.x, ball.y)) closer++;
+    }
+    presser = closer === 0;
+  }
+
   // 阵型锚点(随球平移)
   const ax = p.anchor.x + FT.homeShift * (ball.x - (X0 + X1) / 2);
   const ay = p.anchor.y + FT.homeShift * (ball.y - GOAL_Y) * 0.5;
@@ -1056,15 +1068,24 @@ function fieldDrive(p) {
     const s = FT.homeStr * clamp(d / 320, 0, 1) * mix('home');
     fx += (ax - p.x) / d * s; fy += (ay - p.y) / d * s;
   }
-  // 2. 球引力:防守拉向球(近强远弱——最近者自然扑球,涌现逼抢;靠近持球者时压过门保护),
+  // 2. 球引力:防守拉向球——有扑球资格者全强度冲刺,其余人仅微弱吸引(站位由门保护/封堵位决定);
   //    进攻拉向球前方接应点
   {
     const tx = holder ? holder.x + dg * 110 * wa : ball.x;
     const ty = holder ? holder.y : ball.y;
     const d = Math.max(1, dist2(p.x, p.y, tx, ty));
-    const nearF = 0.15 + 0.85 * clamp(1 - d / 350, 0, 1);   // 最近者≈1,远处≈0.15
-    const s = FT.ballStr * nearF * (0.6 + 0.8 * FT.aggro) * mix('ball');
+    const nearF = 0.15 + 0.85 * clamp(1 - d / 350, 0, 1);
+    const s = FT.ballStr * nearF * (presser ? 1.9 : 0.25) * (0.6 + 0.8 * FT.aggro) * mix('ball');
     fx += (tx - p.x) / d * s; fy += (ty - p.y) / d * s;
+  }
+  // 2b. 封堵位力(防守非扑球者):站"球→己方门"连线靠球侧,封锁直塞/射门路线
+  if (!presser && phase === 'def') {
+    const gkx = ownGoalX(p);
+    const bx2 = ball.x + (gkx - ball.x) * 0.45;
+    const by2 = ball.y + (GOAL_Y - ball.y) * 0.45;
+    const d = Math.max(1, dist2(p.x, p.y, bx2, by2));
+    const s = FT.goalStr * 0.55 * mix('goal');
+    fx += (bx2 - p.x) / d * s; fy += (by2 - p.y) / d * s;
   }
   // 3. 门保护:站"球→己方门"线上,按车道分散(防 3 人抱团中路,边路留人);
   //    自己贴近持球者时门保护自动让位给球引力(贴身逼抢优先于站线)
@@ -1157,9 +1178,10 @@ function fieldDrive(p) {
     if (!p.ftx) { p.ftx = tx; p.fty = ty; }
     else { p.ftx += (tx - p.ftx) * 0.35; p.fty += (ty - p.fty) * 0.35; }
     p.target = { x: clamp(p.ftx, X0 + PR + 4, X1 - PR - 4), y: clamp(p.fty, Y0 + PR + 4, Y1 - PR - 4) };
-    p.thrust = clamp(300 + mag * 0.55, 380, 820);
+    // 速度对齐:扑球资格者全力冲刺(匹配旧逻辑逼抢 830+sprint),防态近球也冲刺
     const dBall = Math.max(1, dist2(p.x, p.y, ball.x, ball.y));
-    p.sprint = fast || (mag > 700 && wa > 0.5) || (wd > 0.5 && dBall < 230);  // 防态贴身扑球冲刺
+    p.sprint = fast || presser || (mag > 700 && wa > 0.5) || (wd > 0.5 && dBall < 230);
+    p.thrust = clamp(300 + mag * 0.55, 380, presser ? 940 : 820);
   }
   p.action = wd > 0.5 ? (fast ? '反击跑位' : '防守站位') : (fast ? '反击跑位' : '进攻跑位');
 }
