@@ -705,11 +705,15 @@ function gkEnabled(team) {
 const gkOf = (team) => (team === 'A' ? playersA : playersB).find(p => p.isGK) || null;
 
 // 门将覆盖模型:射门评估 / 扑救判定 / xG 三处共用一个模型
+// 门将离门线越远,覆盖越低(出击的空当,挑射/远角自然可利用)
 function gkCoverage(gk, shotDist, crossY) {
   if (!gk) return 0.5;
   const coverY = clamp(1 - Math.abs(crossY - gk.y) / (GOAL_H / 2 + gk.attrs.reach * 40), 0, 1);
   const distF = clamp(1 - shotDist / 700, 0.1, 1);
-  return clamp(0.22 + 0.35 * (1 - distF) * (0.5 + 0.5 * gk.attrs.reach) * coverY, 0.10, 0.75);
+  let cov = clamp(0.22 + 0.35 * (1 - distF) * (0.5 + 0.5 * gk.attrs.reach) * coverY, 0.10, 0.75);
+  const offLine = clamp(Math.abs(gk.x - ownGoalX(gk)) / 130, 0, 1);  // 出击程度
+  cov *= 1 - 0.55 * offLine;
+  return clamp(cov, 0.06, 0.75);
 }
 
 // 门将扑救(在进球判定前调用):近距离没收,远距离扑出弹回
@@ -998,30 +1002,17 @@ function decide(p) {
       burstU = openSpace * (0.35 + chaseBonus + (transT[p.team] > 0 ? 0.3 : 0)) * (1 - pressF * 0.6) * TUN.dribble * risk;
     }
 
-    // 挑射:门将离门线出击时才用(吊过出击门将头顶);门将站门线则正常射门
-    let chipU = 0;
-    if (oppGK && gDist < 420) {
-      const gkDist = dist2(oppGK.x, oppGK.y, p.x, p.y);
-      const gkOffLine = Math.abs(oppGK.x - goalX(p)) > 80;   // 门将离开门线=出击
-      if (gkOffLine && (clear || gkDist < 170)) {
-        const benefit = clamp(1 - gDist / 450, 0.1, 1) * angleFactor;
-        const succ = gkDist < 170 && gDist < 300 ? 0.78 : 0.6;   // 1v1 挑射成功率最高
-        chipU = benefit * succ * TUN.shoot * risk * (gkDist < 130 ? 1.2 : 1);
-      }
-    }
-
+    // 射门:效用已含门将覆盖(离位覆盖骤降),执行方式由 startShot 按局势自动选择
     let best = 'dribble', bu = dribbleU;
     if (shotU > bu) { bu = shotU; best = 'shot'; }
     if (passU > bu) { bu = passU; best = 'pass'; }
     if (trickU > bu) { bu = trickU; best = 'trick'; }
     if (burstU > bu) { bu = burstU; best = 'burst'; }
-    if (chipU > bu) { bu = chipU; best = 'chip'; }
     // 阈值触发器:空门且近距离且附近无人且门将不在位 → 无条件起脚
     if (clear && gDist < 200 && (!nearPress || npd > 60) && gkFactor < 0.25 && TUN.shoot > 0.05) best = 'shot';
 
     if (best === 'pass' && passT) { p.patience = 0; startPass(p, passT, passLoft, pressF); }
     else if (best === 'shot') { p.patience = 0; startShot(p, pressF); }
-    else if (best === 'chip') { p.patience = 0; doChip(p); }
     else if (best === 'trick' && opp) { p.patience = 0; doTrick(p, opp); }
     else if (best === 'burst') { p.patience = 0; doBurst(p); }
     else {
@@ -1097,28 +1088,38 @@ function startPass(p, t, loft, pressF) {
 
 function startShot(p, pressF) {
   const gk = gkOf(p.team === 'A' ? 'B' : 'A');
-  // 选角:门将偏向哪侧就打哪侧的对角(像真人一样看门将站位);空门随机打一角
-  let aimY;
+  // 执行方式由局势自然决定(不是硬编码动作):
+  //  - 门将离门线出击且近 → 挑射吊过其头顶(带弧线)
+  //  - 门将在位 → 低平/推射打远角
+  //  - 空门 → 随机打角
+  let loft = false, bend = 0, aimY;
   if (gk) {
+    const gkDist = dist2(gk.x, gk.y, p.x, p.y);
+    const gkOffLine = Math.abs(gk.x - ownGoalX(gk)) > 80;
     const far = gk.y < GOAL_Y ? 1 : -1;
-    aimY = GOAL_Y + far * GOAL_H * 0.32 + (Math.random() - 0.5) * 20;
+    if (gkOffLine && gkDist < 260) {
+      loft = true;  // 挑射:吊过出击门将
+      aimY = GOAL_Y + far * GOAL_H * 0.3 + (Math.random() - 0.5) * 20;
+      bend = far * (0.4 + Math.random() * 0.5);  // 轻微弧线
+    } else {
+      aimY = GOAL_Y + far * GOAL_H * 0.32 + (Math.random() - 0.5) * 20;  // 远角
+    }
   } else {
     aimY = GOAL_Y + (Math.random() < 0.5 ? -1 : 1) * GOAL_H * 0.30;
   }
-  // 精度散布:好射手贴角,差射手飘(修复 shoot≈1 时误差为零的老 bug)
+  // 精度散布:好射手贴角,差射手飘(被逼抢更飘)
   const spread = Math.max(12, (1.3 - p.attrs.shoot) * 150) * (1 + 1.5 * pressF);
   const ty = aimY + (Math.random() - 0.5) * 2 * spread;
   const gd = dist2(p.x, p.y, goalX(p), GOAL_Y);
-  // 力度由距离决定:贴脸=轻推(瞬时出脚),远射=爆射(蓄力)
-  const sp = clamp(gd * 1.8, 140, 760);
+  const sp = loft ? clamp(gd * 2.2, 420, 640) : clamp(gd * 1.8, 140, 760);
   const power = clamp((sp - 140) / 620, 0, 1);
-  p.windup = TUN.wind * (0.02 + 0.40 * power) * (1 - 0.5 * pressF);  // 被逼→仓促起脚
-  // xG:用瞄准点(远角对门将覆盖低 → 评估与执行一致)
+  p.windup = TUN.wind * (0.02 + 0.40 * power) * (1 - 0.5 * pressF);
+  // xG:用瞄准点评估(远角/挑射对门将覆盖低 → 评估与执行一致)
   const gkF = gk ? gkCoverage(gk, gd, aimY) : 0.5;
   const succBase = gd < 200 ? 0.9 : 0.6;
   const xg = succBase * (1 - gkF);
-  p.windAct = { type: 'shot', ty, sp, xg, errMul: 1 + 1.5 * pressF };
-  p.label = '蓄力·射门'; p.labelT = Math.min(1.0, 0.35 + p.windup * 2);  // 近射标签一闪而过
+  p.windAct = { type: 'shot', ty, sp, xg, loft, bend };
+  p.label = loft ? '蓄力·挑射' : '蓄力·射门'; p.labelT = Math.min(1.0, 0.35 + p.windup * 2);
 }
 
 function firePass(p) {
@@ -1144,41 +1145,19 @@ function fireShot(p) {
   const a = p.windAct;
   ball.ctrl = null;
   ball.lastTouch = p;
-  ball.alt = 0; ball.altV = 0;
+  ball.alt = a.loft ? 40 : 0;
+  ball.altV = a.loft ? 320 + Math.random() * 100 : 0;
+  ball.bend = a.loft ? a.bend : 0;  // 弧线:飞行中持续横向偏转
   const d = Math.max(1, dist2(p.x, p.y, goalX(p), a.ty));
   ball.vx = (goalX(p) - p.x) / d * a.sp;
   ball.vy = (a.ty - p.y) / d * a.sp;
   p.cd = 0.3;
-  p.label = '射门'; p.labelT = 0.8;
+  p.label = a.loft ? '挑射' : '射门'; p.labelT = 0.8;
   p.windAct = null;
   p.stats.shot++;
   if (Math.abs(a.ty - GOAL_Y) <= GOAL_H / 2) p.stats.shotOn++;
   if (p.team === 'A') xgA += a.xg; else xgB += a.xg;
-  log(`${nameOf(p)} 射门!`, '');
-}
-
-// 挑射:吊过出击门将头顶入网(带弧线,门将够不着)
-function doChip(p) {
-  const gk = gkOf(p.team === 'A' ? 'B' : 'A');
-  let aimY = GOAL_Y + (Math.random() < 0.5 ? -1 : 1) * GOAL_H * 0.3;
-  if (gk) {
-    const far = gk.y < GOAL_Y ? 1 : -1;   // 打门将另一侧
-    aimY = GOAL_Y + far * GOAL_H * 0.3;
-  }
-  const gd = dist2(p.x, p.y, goalX(p), GOAL_Y);
-  const sp = clamp(gd * 2.2, 420, 640);
-  const d = Math.max(1, dist2(p.x, p.y, goalX(p), aimY));
-  ball.ctrl = null;
-  ball.lastTouch = p;
-  ball.alt = 40; ball.altV = 320 + Math.random() * 100;  // 高弧线越过门将
-  ball.vx = (goalX(p) - p.x) / d * sp;
-  ball.vy = (aimY - p.y) / d * sp;
-  p.cd = 0.4;
-  p.label = '挑射'; p.labelT = 0.7;
-  p.stats.shot++;
-  if (Math.abs(aimY - GOAL_Y) <= GOAL_H / 2) p.stats.shotOn++;
-  if (p.team === 'A') xgA += 0.5; else xgB += 0.5;
-  log(`${nameOf(p)} 挑射!`, '');
+  log(`${nameOf(p)} ${a.loft ? '挑射!' : '射门!'}`, '');
 }
 
 // 暴趟:第一脚触球把球趟远再追(距离/速度按"到达时间"反推,趟大了会被断/出界)
@@ -1409,7 +1388,8 @@ function step(dt) {
     if (air) {
       ball.altV -= 350 * dt;
       ball.alt += ball.altV * dt;
-      if (ball.alt <= 0) { ball.alt = 0; ball.altV = 0; }
+      if (ball.bend) ball.vy += ball.bend * 45 * dt;  // 弧线球:飞行中持续横向偏转
+      if (ball.alt <= 0) { ball.alt = 0; ball.altV = 0; ball.bend = 0; }
     }
 
     // 门将扑救(先于进球判定;朝球门飞来的球都触发——含高空球/头球/飘球,门将须在有效覆盖内)
