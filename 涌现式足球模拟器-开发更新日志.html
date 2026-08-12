@@ -74,7 +74,30 @@
   </header>
 
   <div class="v" style="--vc:#3fb950">
-    <div class="vhead"><span class="vname">v2.0 · 智能重构(感知/记忆/效用规则)</span><span class="vtag">最新</span><span class="vdate">2026-08-12</span></div>
+    <div class="vhead"><span class="vname">v2.1 · 从"小孩踢球"到"校队"(二过一/节奏/假动作/协防)</span><span class="vtag">最新</span><span class="vdate">2026-08-12</span></div>
+    <div class="vquote"><b>来源:</b>外部评价"有小孩踢球的水准,懂基础站位"——针对四个短板逐项补课。</div>
+    <div class="sec">实现</div>
+    <ul>
+      <li><b>二过一(撞墙配合)</b>:传完球进入 1.5s 前插状态(标签"前插"),配合预测落点传球,队友可直塞回来——传跑一体化</li>
+      <li><b>节奏控制</b>:teamRisk 按 比分+时间 调整冒险系数——领先且末段收着踢,落后敢赌、末段更凶</li>
+      <li><b>假动作</b>:被压迫时 12% 概率虚晃一枪(横向变向),1s 内过人成功率 +0.12(对手重心被骗)</li>
+      <li><b>防守协同</b>:队友上抢时,防线收紧(×0.92)并整体向球侧收拢,防止"一过全过"</li>
+      <li><b>逼抢追拦截点</b>:逼抢/抢球目标 = 球预测位置(球位置 + 速度×0.3),不再追着球屁股跑</li>
+    </ul>
+    <div class="sec">管线验证(每配置 3 场均值)</div>
+    <table>
+      <tr><th>配置</th><th>进球</th><th>射门</th><th>传球</th><th>成功率%</th><th>拦截</th><th>抢断</th><th>前插</th><th>假动作</th></tr>
+      <tr><td>均衡</td><td>4.7</td><td>5.7</td><td>105.7</td><td>80.3</td><td>14</td><td>37.7</td><td>56</td><td>2.7</td></tr>
+      <tr><td>传控</td><td>2</td><td>2.7</td><td>124.7</td><td>84</td><td>14</td><td>47.7</td><td>59</td><td>1.7</td></tr>
+      <tr><td>防守反击</td><td>8</td><td>8</td><td>103.7</td><td>79</td><td>16</td><td>31.3</td><td>53.3</td><td>1.7</td></tr>
+      <tr><td>长传反击</td><td>4.7</td><td>5.3</td><td>113.3</td><td>83.7</td><td>18.7</td><td>37.3</td><td>65</td><td>2.3</td></tr>
+      <tr><td>高位逼抢</td><td>3.7</td><td>3.7</td><td>125.3</td><td>81</td><td>34.3</td><td>51.3</td><td>66</td><td>1.7</td></tr>
+    </table>
+    <div class="data">战术指纹更清晰:传控=最多传球+最高成功率+最少进球(控制不冒险);防反=最多进球(反击效率,上一版偏弱已被治好);高位=最多拦截+抢断(压迫机器)。8 场均衡独立测试:红 2 胜 / 蓝 3 胜 / 平 3——无系统失衡。</div>
+  </div>
+
+  <div class="v" style="--vc:#3fb950">
+    <div class="vhead"><span class="vname">v2.0 · 智能重构(感知/记忆/效用规则)</span><span class="vtag">上一版</span><span class="vdate">2026-08-12</span></div>
     <div class="vquote"><b>目标:</b>把设计定稿的"感知层 + 上下文记忆 + 基本规则集"全部落地,让 AI 从"反应式"变"预测式"。</div>
     <div class="sec">实现</div>
     <ul>
