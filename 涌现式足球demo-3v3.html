@@ -259,6 +259,30 @@ const allPlayers = () => [...playersA, ...playersB];
 const TUN = { pass: 1, shoot: 1, trick: 1, dribble: 1, wo: 0.3, wc: 0.3, wp: 0.2, wW: 0.13, wL: 0.12, dDeny: 0.35, dOpen: 0.3, dLane: 0.35, rep: 300, stag: 1, wind: 1, dLine: 0.35, press: 1, sDepth: 1, loft: 1 };
 let transT = { A: 0, B: 0 };  // 反击爆发计时(夺回球权后)
 
+// ============ v4 规则力空间智能(与旧逻辑并行,支持新旧对踢) ============
+// 范式:所有移动 = 同一套力场叠加,职责/状态 = 权重模板,无离散角色逻辑
+// URL 对踢: ?aiA=new&aiB=old   (new=力场, old=旧网格逻辑);默认 old 保持基线可复现
+const AI_VER = { A: 'old', B: 'old' };
+(function () {
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.get('aiA') === 'new' || q.get('aiA') === 'old') AI_VER.A = q.get('aiA');
+    if (q.get('aiB') === 'new' || q.get('aiB') === 'old') AI_VER.B = q.get('aiB');
+  } catch (e) {}
+})();
+const aiVerOf = (p) => AI_VER[p.team];
+
+// 力场参数(Step1 默认值,后续进调参面板)
+const FT = {
+  homeStr: 260, homeShift: 0.5, ballStr: 220, goalStr: 320,
+  structK: 0.5, structR: 110, markBase: 170,
+  spaceStr: 300, spaceBW: 70, spaceAspect: 1.6, chanStr: 180,
+  aggro: 1, recoverRate: 1.2
+};
+// 攻/防权重模板:职责 = 权重投影,同一范式(0~1,乘各力强度)
+const W_ATT = { home: 0.35, ball: 0.35, goal: 0, struct: 0.3, mark: 0, space: 0.85, chan: 0.8 };
+const W_DEF = { home: 1, ball: 1, goal: 1, struct: 0.8, mark: 0.55, space: 0.2, chan: 0 };
+
 function randAttr() { return 0.65 + Math.random() * 0.7; }
 
 function teamCount(team) {
@@ -292,6 +316,7 @@ function makePlayer(team, idx, anchor) {
     lookAt: team === 'A' ? 0 : Math.PI, headA: 0, headT: 0, headIdle: Math.random() * 1.5,
     mem: null, view: null, viewAt: -1, patience: 0,
     runAfter: null, feintAt: -10, lastKnock: -10, isGK: false, gkDive: null, protected: 0,
+    stateMix: 1,
     react: 0.09 + Math.random() * 0.08, decideAt: Math.random() * 0.1
   };
 }
@@ -945,11 +970,136 @@ function decide(p) {
     else { p.role = desiredRole; p.roleAt = simT; }
   }
 
+  // v4 规则力:新逻辑接管无球移动(保持 接应/前插 覆盖优先)
+  if (aiVerOf(p) === 'new') { fieldDrive(p); return; }
+
   if (p.role === 'press') { seekTarget(p, pb.x + pb.vx * 0.3, pb.y + pb.vy * 0.3, 830 * Math.max(0.4, TUN.press)); p.sprint = true; p.action = '逼抢'; }
   else if (p.role === 'chase') { seekTarget(p, pb.x + pb.vx * 0.3, pb.y + pb.vy * 0.3, 950); p.sprint = true; p.action = '抢球'; }
   else if (p.role === 'support') supportPositioning(p);
   else if (p.role === 'defLine') defLinePositioning(p);
   else recoverPositioning(p);
+}
+
+// ============ v4 力场驱动(唯一无球移动范式) ============
+// 哲学:空间智能 = 力的叠加,无离散角色逻辑。
+// 七力:阵型(锚点随球平移)/球引力/门保护/结构弹簧(补防换位涌现)/盯人/空位(方向采样密度场)/通道。
+// 攻防 = 权重模板投影(W_ATT/W_DEF),转换按 recoverRate 平滑,中场/边路/盯人全靠权重差异涌现。
+
+// 空位力:12 方向采样,每方向评估"对手密度+攻击方向偏好",按低密度加权平均取方向
+function fieldSpace(p, vopps, dist, aspect, attackBias) {
+  const N = 12, dg = dirX(p);
+  let bx = 0, by = 0, bw = 0;
+  for (let i = 0; i < N; i++) {
+    const ang = (i / N) * Math.PI * 2;
+    const sx = p.x + Math.cos(ang) * dist;
+    const sy = p.y + Math.sin(ang) * dist;
+    let den = 1e-6;
+    for (const o of vopps) {
+      const dx = (sx - o.x) / FT.spaceBW, dy = (sy - o.y) / (FT.spaceBW * FT.spaceAspect);
+      den += Math.exp(-(dx * dx + dy * dy) / 2);
+    }
+    // 攻击方向偏好(仅攻态):朝对方球门方向加分
+    const fwd = clamp(((sx - p.x) * dg) / dist, 0, 1) * attackBias;
+    const w = 1 / (den + 0.15) + fwd * 2;
+    bx += Math.cos(ang) * w; by += Math.sin(ang) * w; bw += w;
+  }
+  if (bw > 0) { bx /= bw; by /= bw; }
+  const m = Math.max(0.2, Math.hypot(bx, by));
+  return { x: bx / m, y: by / m };
+}
+
+function fieldDrive(p) {
+  const holder = ball.ctrl;
+  const dg = dirX(p);
+  const vopps = viewOpps(p);
+  const fast = transT[p.team] > 0;
+  // 攻防混合:0=攻(己方持球),1=防(对方持球);每帧在 step 里按 recoverRate 平滑
+  const mx = p.stateMix;
+  const wa = 1 - mx, wd = mx;
+  const mix = (k) => wd * W_DEF[k] + wa * W_ATT[k];
+
+  // 阵型锚点(随球平移)
+  const ax = p.anchor.x + FT.homeShift * (ball.x - (X0 + X1) / 2);
+  const ay = p.anchor.y + FT.homeShift * (ball.y - GOAL_Y) * 0.5;
+
+  // —— 七力(方向 × 强度,强度来自 FT 物理量) ——
+  let fx = 0, fy = 0;
+
+  // 1. 阵型力:拉向锚点
+  {
+    const d = Math.max(1, dist2(p.x, p.y, ax, ay));
+    const s = FT.homeStr * clamp(d / 320, 0, 1) * mix('home');
+    fx += (ax - p.x) / d * s; fy += (ay - p.y) / d * s;
+  }
+  // 2. 球引力:防守拉向球(近强远弱——最近者自然扑球,涌现逼抢),进攻拉向球前方接应点
+  {
+    const tx = holder ? holder.x + dg * 110 * wa : ball.x;
+    const ty = holder ? holder.y : ball.y;
+    const d = Math.max(1, dist2(p.x, p.y, tx, ty));
+    const s = FT.ballStr * (0.25 + 0.75 * clamp(1 - d / 420, 0, 1)) * (0.6 + 0.8 * FT.aggro) * mix('ball');
+    fx += (tx - p.x) / d * s; fy += (ty - p.y) / d * s;
+  }
+  // 3. 门保护:站"球→己方门"线上(防线深度用 TUN.dLine)
+  {
+    const gkx = ownGoalX(p);
+    const lx = clamp(gkx + (ball.x - gkx) * TUN.dLine, X0 + PR + 6, X1 - PR - 6);
+    const ly = clamp(GOAL_Y + (ball.y - GOAL_Y) * 0.5, Y0 + PR + 6, Y1 - PR - 6);
+    const d = Math.max(1, dist2(p.x, p.y, lx, ly));
+    const near = Math.abs(ball.x - gkx) < 430 ? 1 : 0.25;
+    const s = FT.goalStr * near * mix('goal');
+    fx += (lx - p.x) / d * s; fy += (ly - p.y) / d * s;
+  }
+  // 4. 结构弹簧:与队友保持目标间距(队友离位→缺口→弹簧拉补,换位/补防涌现)
+  {
+    for (const m of matesOf(p)) {
+      if (m === p || m.isGK) continue;
+      const d = dist2(p.x, p.y, m.x, m.y);
+      if (d > FT.structR) {
+        const s = FT.structK * 130 * clamp((d - FT.structR) / FT.structR, 0, 1.6) * mix('struct');
+        fx += (m.x - p.x) / d * s; fy += (m.y - p.y) / d * s;
+      }
+    }
+  }
+  // 5. 盯人力:最近进攻者(防守侧为主;盯人力 > 阵型力时自然被跑位带走)
+  {
+    let nb = null, nd = 1e9;
+    for (const o of vopps) {
+      const d = dist2(o.x, o.y, p.x, p.y);
+      if (d < nd) { nd = d; nb = o; }
+    }
+    if (nb) {
+      const d = Math.max(1, nd);
+      const s = FT.markBase * clamp(1 - d / 320, 0.1, 1) * mix('mark') * (0.5 + 0.5 * FT.aggro);
+      fx += (nb.x - p.x) / d * s; fy += (nb.y - p.y) / d * s;
+    }
+  }
+  // 6. 空位力:方向采样密度场(采样距离随状态:反击最远,防守最短)
+  {
+    const dist = fast ? 230 : (wd > 0.5 ? 110 : 150);
+    const sv = fieldSpace(p, vopps, dist, FT.spaceAspect, wa);
+    const s = FT.spaceStr * (0.35 + 0.65 * wa) * (fast ? 1.4 : 1) * mix('space');
+    fx += sv.x * s; fy += sv.y * s;
+  }
+  // 7. 通道力:靠近持球者到接应距离(攻态)
+  if (holder && holder.team === p.team) {
+    const d = Math.max(1, dist2(p.x, p.y, holder.x, holder.y));
+    if (d > 90) {
+      const s = FT.chanStr * clamp((d - 90) / 150, 0, 1) * mix('chan');
+      fx += (holder.x - p.x) / d * s; fy += (holder.y - p.y) / d * s;
+    }
+  }
+
+  const mag = Math.hypot(fx, fy);
+  if (mag > 8) {
+    const d = Math.min(170, 60 + mag / 5);
+    p.target = {
+      x: clamp(p.x + fx / mag * d, X0 + PR + 4, X1 - PR - 4),
+      y: clamp(p.y + fy / mag * d, Y0 + PR + 4, Y1 - PR - 4)
+    };
+    p.thrust = clamp(300 + mag * 0.55, 380, 820);
+    p.sprint = fast || (mag > 700 && wa > 0.5);
+  }
+  p.action = wd > 0.5 ? (fast ? '反击跑位' : '防守站位') : (fast ? '反击跑位' : '进攻跑位');
 }
 
 // ============ 统一对球作用(涌现核心) ============
@@ -1260,6 +1410,11 @@ function step(dt) {
       p.headT = 0.4 + Math.random() * 0.6;
     }
     p.lookAt = p.facing + p.headA;
+    // 攻防状态混合(0=攻 1=防):己方持球→0,对方持球→1,自由球→0.6;按 recoverRate 平滑
+    if (!p.isGK) {
+      const mixT = ball.ctrl ? (ball.ctrl.team === p.team ? 0 : 1) : 0.6;
+      p.stateMix += (mixT - p.stateMix) * Math.min(1, dt * 4 * FT.recoverRate);
+    }
     if (simT >= p.decideAt) { decide(p); p.decideAt = simT + p.react * (1 + Math.random() * 1.2); }
 
     // 蓄力:站定准备,期间可能被抢断;完成后出球
