@@ -786,7 +786,8 @@ function gkDecide(p, pb, dg) {
     }
   }
   // 出击:门前危险区,且"读场"后认为值得出击——队友已覆盖就不出去,留门线
-  if (distToGoal < 230) {
+  // 角度限制:只有球在门线正对范围(±GOAL_H/2+40)才出击,角旗区零角度不冒险留空门
+  if (distToGoal < 230 && Math.abs(ball.y - GOAL_Y) < GOAL_H / 2 + 40) {
     const myD = dist2(p.x, p.y, ball.x, ball.y);
     // 读场:队友比我更近,或已站住"球→门中心"线路 → 不出击
     let mateCover = false;
@@ -812,12 +813,14 @@ function gkDecide(p, pb, dg) {
     }
   }
   // 选位:站"球→门中心"连线,球越近越适度前压(在禁区内活动,不贴底线)
+  // 前压深度受"角度因子"约束:球正对门中心才全力压出,扎堆角旗区时守门线(零角度无压出价值)
   const offY = clamp(GOAL_Y + (ball.y - GOAL_Y) * 0.6, GOAL_Y - GOAL_H / 2 + 16, GOAL_Y + GOAL_H / 2 - 16);
   const bdg = Math.abs(ball.x - gkx);
   const depth = bdg < 420 ? (420 - bdg) / 420 : 0;
-  const gkX = gkx + dg * (12 + depth * (AREA_D * 0.75));
+  const angF = clamp(1 - Math.abs(ball.y - GOAL_Y) / (GOAL_H / 2 + 60), 0.25, 1);
+  const gkX = gkx + dg * (12 + depth * (AREA_D * 0.75) * angF);
   seekTarget(p, clamp(gkX, X0 + 6, X1 - 6), offY, 620);
-  p.action = depth > 0.35 ? '封角度' : '选位';
+  p.action = depth > 0.35 && angF > 0.5 ? '封角度' : '选位';
 }
 
 // 门将开大脚:优先找中路的队友(避开边线),球速按"落点=目标"反推,绝不飞出边线
