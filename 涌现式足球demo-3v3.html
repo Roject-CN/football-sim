@@ -277,8 +277,8 @@ let transT = { A: 0, B: 0 };  // 反击爆发计时(夺回球权后)
 
 // ============ v4 规则力空间智能(与旧逻辑并行,支持新旧对踢) ============
 // 范式:所有移动 = 同一套力场叠加,职责/状态 = 权重模板,无离散角色逻辑
-// URL 对踢: ?aiA=new&aiB=old   (new=力场, old=旧网格逻辑);默认 old 保持基线可复现
-const AI_VER = { A: 'old', B: 'old' };
+// URL 对踢: ?aiA=new&aiB=old   (new=力场, old=旧网格逻辑);默认两队均为力场
+const AI_VER = { A: 'new', B: 'new' };
 (function () {
   try {
     const q = new URLSearchParams(location.search);
