@@ -74,7 +74,27 @@
   </header>
 
   <div class="v" style="--vc:#3fb950">
-    <div class="vhead"><span class="vname">v2.1 · 从"小孩踢球"到"校队"(二过一/节奏/假动作/协防)</span><span class="vtag">最新</span><span class="vdate">2026-08-12</span></div>
+    <div class="vhead"><span class="vname">v2.6 · 守门员系统</span><span class="vtag">最新</span><span class="vdate">2026-08-12</span></div>
+    <div class="vquote"><b>目标:</b>门加大 + 禁区 + 门将智能体(同一套 感知→决策→驱动,不是特判脚本)。</div>
+    <div class="sec">实现</div>
+    <ul>
+      <li><b>几何</b>:球门 100→150px,禁区(160×480),小禁区(60×200),门将金色渲染编号"门"</li>
+      <li><b>门将四角色</b>:选位(站"球→门中心"连线封角度)/ 出击(门前 230px 有把握先到)/ 扑救(预测进门点外推,与记忆层同款)/ 开大脚(找前场队友或纵深)</li>
+      <li><b>覆盖模型三处共用</b>:射门评估 gkFactor / 扑救判定 / xG 统计——同一个模型,评估与结果一致</li>
+      <li><b>射门判断升级</b>:成功率 × (1−门将覆盖);门将离位 = 空门(覆盖骤降);角度 = 球门两柱张角;门将贴身 = 1v1 推射加成</li>
+      <li><b>阈值触发收紧</b>:需"门将不在位"才无条件起脚</li>
+      <li>配置:红/蓝门将勾选框(默认开);传控/支援不回传门将;慢球门将优先(禁区内可用手)</li>
+    </ul>
+    <div class="sec">调试中发现并修复的两个 bug</div>
+    <ul>
+      <li class="fix">扑救<b>逐帧掷骰</b>→ 球在覆盖区停留 0.2s=12 帧 ≈ 必扑(0:0 泛滥)→ 改为"每次进入覆盖区只掷一次骰"</li>
+      <li class="fix">头球速度 170~330 低于扑救触发阈值 240 → 门将无视头球(长传反击 0:13 炮轰)→ 阈值降至 160</li>
+    </ul>
+    <div class="data">验证(3场均值):均衡进球 6、扑救 2.7、xG 2:1.5;传控 2.3 球(最少,控球锁死);防反/长传 8-10 球(快攻/空战);均衡总比分 5:5。扑出弹回 → 门前混战补射,机制自然运转。</div>
+  </div>
+
+  <div class="v" style="--vc:#3fb950">
+    <div class="vhead"><span class="vname">v2.1 · 从"小孩踢球"到"校队"(二过一/节奏/假动作/协防)</span><span class="vtag">上一版</span><span class="vdate">2026-08-12</span></div>
     <div class="vquote"><b>来源:</b>外部评价"有小孩踢球的水准,懂基础站位"——针对四个短板逐项补课。</div>
     <div class="sec">实现</div>
     <ul>
