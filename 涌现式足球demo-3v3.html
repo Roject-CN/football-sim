@@ -259,6 +259,7 @@ function makePlayer(team, idx, anchor) {
     action: '', label: '', labelT: 0, tlab: '',
     facing: team === 'A' ? 0 : Math.PI,
     mem: null, view: null, viewAt: -1, patience: 0,
+    runAfter: null, feintAt: -10,
     react: 0.09 + Math.random() * 0.08, decideAt: Math.random() * 0.1
   };
 }
@@ -411,7 +412,7 @@ function buildView(p) {
   const v = {};
   const db = Math.hypot(ball.x - p.x, ball.y - p.y);
   const eb = (1 - p.attrs.vision) * Math.min(db * 0.2, 45);
-  v.ball = { x: ball.x + gauss() * eb, y: ball.y + gauss() * eb, conf: 1 };
+  v.ball = { x: ball.x + gauss() * eb, y: ball.y + gauss() * eb, vx: ball.vx, vy: ball.vy, conf: 1 };
   for (const q of allPlayers()) {
     if (q === p) continue;
     const d = Math.hypot(q.x - p.x, q.y - p.y);
@@ -583,11 +584,12 @@ function supportPositioning(p) {
   p.action = fast ? '反击跑位' : '支援';
 }
 
-// 防守站位:站线 + 个人车道 + 封堵持球者的传球通道(通道用感知到的对手预测位置)
+// 防守站位:站线 + 个人车道 + 封堵持球者的传球通道 + 协防补位(队友上抢时收紧)
 function defLinePositioning(p) {
   const holder = ball.ctrl;
   if (!holder) { recoverPositioning(p); return; }
-  const lineX = clamp(holder.x + (ownGoalX(p) - holder.x) * TUN.dLine, X0 + PR + 6, X1 - PR - 6);
+  const matePressing = matesOf(p).some(m => m.role === 'press');
+  const lineX = clamp(holder.x + (ownGoalX(p) - holder.x) * TUN.dLine * (matePressing ? 0.92 : 1), X0 + PR + 6, X1 - PR - 6);
   const vopps = viewOpps(p);
   let best = null, bs = -1e9;
   for (const cy0 of [GOAL_Y - 165, GOAL_Y - 82, GOAL_Y, GOAL_Y + 82, GOAL_Y + 165]) {
@@ -598,7 +600,9 @@ function defLinePositioning(p) {
     for (const o of vopps) {
       if (lineDist(holder.x, holder.y, o.x, o.y, lineX, y) < 26) deny += 0.5;
     }
-    const s = TUN.dOpen * clamp(open / 100, 0, 1) + TUN.dDeny * clamp(deny, 0, 1) + TUN.dLane * (1 - clamp(Math.abs(y - laneY(p)) / 200, 0, 1));
+    // 协防补位:队友上抢时,其余人向球侧收紧,防止被一过全过
+    const cover = matePressing ? 0.15 * (1 - clamp(Math.abs(y - ball.y) / 200, 0, 1)) : 0;
+    const s = TUN.dOpen * clamp(open / 100, 0, 1) + TUN.dDeny * clamp(deny, 0, 1) + TUN.dLane * (1 - clamp(Math.abs(y - laneY(p)) / 200, 0, 1)) + cover;
     if (s > bs) { bs = s; best = { x: lineX, y }; }
   }
   p.target = best; p.thrust = 430; p.action = '回防';
@@ -617,6 +621,15 @@ function recoverPositioning(p) {
     if (s > bs) { bs = s; best = { x: tx, y }; }
   }
   p.target = best; p.thrust = 400; p.action = '补位';
+}
+
+// 节奏控制:按比分+时间调整冒险系数——领先稳、落后赌、末段更极端
+function teamRisk(team) {
+  const gd = team === 'A' ? scoreA - scoreB : scoreB - scoreA;
+  let r = 1;
+  if (gd > 0 && matchT < 30) r -= 0.25;                 // 领先且快结束 → 收着踢
+  if (gd < 0) r += 0.25 + (matchT < 30 ? 0.3 : 0);      // 落后 → 敢赌,末段更凶
+  return r;
 }
 
 // ============ 决策层(效用式决策) ============
@@ -659,8 +672,7 @@ function decide(p) {
         startShot(p); p.label = '仓促射门'; p.labelT = 0.8; return;
       }
     }
-    const risk = 1 + (p.team === 'A' ? (scoreA < scoreB ? 0.3 : 0) : (scoreB < scoreA ? 0.3 : 0))
-               + (matchT < 20 ? 0.2 : 0) + (desperate ? 0.3 : 0);
+    const risk = teamRisk(p.team) + (desperate ? 0.3 : 0);
 
     // —— R4 效用 = 收益 × 成功率估计 × 风格权重 × 风险 ——
     const pressF = nearPress ? clamp(1 - dist2(nearPress.x, nearPress.y, p.x, p.y) / 70, 0, 1) : 0;
@@ -712,7 +724,15 @@ function decide(p) {
     if (best === 'pass' && passT) { p.patience = 0; startPass(p, passT, passLoft); }
     else if (best === 'shot') { p.patience = 0; startShot(p); }
     else if (best === 'trick' && opp) { p.patience = 0; doTrick(p, opp); }
-    else { p.action = '带球'; seekTarget(p, gc.x, gc.y, 430); }
+    else {
+      // 假动作:被压迫时偶尔虚晃一枪(节奏变化),1s 内过人成功率提升
+      if (nearPress && Math.random() < 0.12 && simT - p.feintAt > 2) {
+        p.feintAt = simT;
+        p.vy += (Math.random() < 0.5 ? -1 : 1) * 140;  // 横向虚晃
+        p.action = '假动作';
+      } else p.action = '带球';
+      seekTarget(p, gc.x, gc.y, 430);
+    }
     return;
   }
 
@@ -727,6 +747,15 @@ function decide(p) {
     } else p.receive = null;
   }
 
+  // —— 二过一:传完球立刻前插(撞墙配合),队友可直塞回来 ——
+  if (p.runAfter && holder && holder.team === p.team && simT < p.runAfter.until) {
+    seekTarget(p, clamp(holder.x + dg * 185, X0 + PR + 6, X1 - PR - 6), clamp(laneY(p), Y0 + PR + 6, Y1 - PR - 6), 700);
+    p.sprint = true;
+    p.action = '前插';
+    return;
+  }
+  if (p.runAfter && (simT >= p.runAfter.until || ball.ctrl === p || (holder && holder.team !== p.team))) p.runAfter = null;
+
   // —— 无球角色(带滞回,防高频抖动) ——
   let desiredRole;
   if (holder && holder.team === p.team) desiredRole = 'support';
@@ -738,8 +767,8 @@ function decide(p) {
     else { p.role = desiredRole; p.roleAt = simT; }
   }
 
-  if (p.role === 'press') { seekTarget(p, pb.x, pb.y, 830 * Math.max(0.4, TUN.press)); p.sprint = true; p.action = '逼抢'; }
-  else if (p.role === 'chase') { seekTarget(p, pb.x, pb.y, 950); p.sprint = true; p.action = '抢球'; }
+  if (p.role === 'press') { seekTarget(p, pb.x + pb.vx * 0.3, pb.y + pb.vy * 0.3, 830 * Math.max(0.4, TUN.press)); p.sprint = true; p.action = '逼抢'; }
+  else if (p.role === 'chase') { seekTarget(p, pb.x + pb.vx * 0.3, pb.y + pb.vy * 0.3, 950); p.sprint = true; p.action = '抢球'; }
   else if (p.role === 'support') supportPositioning(p);
   else if (p.role === 'defLine') defLinePositioning(p);
   else recoverPositioning(p);
@@ -789,6 +818,7 @@ function firePass(p) {
   p.stats.pass++;
   pendingPass = { p, t: a.t, at: simT };
   a.t.receive = { until: simT + 1.3 };
+  p.runAfter = { until: simT + 1.5 };  // 二过一:传完球前插
   log(`${teamName[p.team]}${p.idx + 1} ${a.loft ? '高空球' : '传球'} → ${teamName[a.t.team]}${a.t.idx + 1}`, '');
 }
 
@@ -876,7 +906,7 @@ function doTrick(p, opp) {
   const vopps = viewOpps(p);
   const s1 = sideClear(p, 1, vopps), s2 = sideClear(p, -1, vopps);
   const side = s1 && s2 ? (Math.random() < 0.5 ? -1 : 1) : s1 ? 1 : -1;
-  const win = Math.random() < 0.5 * p.attrs.dribble / (p.attrs.dribble + real.attrs.defend) + 0.15;
+  const win = Math.random() < 0.5 * p.attrs.dribble / (p.attrs.dribble + real.attrs.defend) + 0.15 + (simT - p.feintAt < 1 ? 0.12 : 0);  // 刚做完假动作 → 对手重心被骗,成功率提升
   if (win) {
     ball.ctrl = null;
     ball.lastTouch = p;
@@ -1146,8 +1176,8 @@ function goalKick(team) {
 }
 
 function kickoffPositions() {
-  playersA.forEach((p, i) => { const a = anchorsFor('A')[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; });
-  playersB.forEach((p, i) => { const a = anchorsFor('B')[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; });
+  playersA.forEach((p, i) => { const a = anchorsFor('A')[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.feintAt = -10; });
+  playersB.forEach((p, i) => { const a = anchorsFor('B')[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.feintAt = -10; });
   ball.x = (X0 + X1) / 2; ball.y = GOAL_Y; ball.vx = 0; ball.vy = 0; ball.alt = 0; ball.altV = 0;
   ball.ctrl = null; ball.lastTouch = null;
   trail.length = 0;
