@@ -289,6 +289,7 @@ function makePlayer(team, idx, anchor) {
     stats: { goal: 0, assist: 0, shot: 0, shotOn: 0, pass: 0, passOk: 0, trick: 0, trickOk: 0, tackle: 0, tackleOk: 0, intc: 0, intcOk: 0, header: 0, headerOk: 0, lost: 0 },
     action: '', label: '', labelT: 0, tlab: '',
     facing: team === 'A' ? 0 : Math.PI,
+    lookAt: team === 'A' ? 0 : Math.PI, headA: 0, headT: 0, headIdle: Math.random() * 1.5,
     mem: null, view: null, viewAt: -1, patience: 0,
     runAfter: null, feintAt: -10, lastKnock: -10, isGK: false, gkDive: null, protected: 0,
     react: 0.09 + Math.random() * 0.08, decideAt: Math.random() * 0.1
@@ -419,12 +420,12 @@ function initMem(p) {
   }
 }
 
-// 视野锥 + 遮挡:朝向 = 移动方向;视线被对手身体挡住 → 不可见(队友不挡视线)
+// 视野锥 + 遮挡:朝向 = 观察朝向(移动方向 + 摆头);视线被对手身体挡住 → 不可见(队友不挡视线)
 function visibleTo(p, q) {
   const dx = q.x - p.x, dy = q.y - p.y;
   const d = Math.hypot(dx, dy);
   if (d > VISION_R || d < 2) return false;
-  const ang = Math.atan2(dy, dx) - p.facing;
+  const ang = Math.atan2(dy, dx) - p.lookAt;
   const a = Math.atan2(Math.sin(ang), Math.cos(ang));
   if (Math.abs(a) * 180 / Math.PI > VISION_HALF) return false;
   for (const m of allPlayers()) {
@@ -461,11 +462,17 @@ function buildView(p) {
   const db = Math.hypot(ball.x - p.x, ball.y - p.y);
   const eb = (1 - p.attrs.vision) * Math.min(db * 0.2, 45);
   v.ball = { x: ball.x + gauss() * eb, y: ball.y + gauss() * eb, vx: ball.vx, vy: ball.vy, conf: 1 };
+  // 被贴身 → 抬头受限:触觉内越近,感知越糊(身体对抗的 Debuff 之一,不阻断观察本身)
+  let touchF = 1;
+  for (const o of oppsOf(p)) {
+    const td = dist2(o.x, o.y, p.x, p.y);
+    if (td < 70) touchF = Math.max(touchF, 1 + (70 - td) / 70 * 1.4);
+  }
   for (const q of allPlayers()) {
     if (q === p) continue;
     const d = Math.hypot(q.x - p.x, q.y - p.y);
     if (visibleTo(p, q)) {
-      const e = (1 - p.attrs.vision) * Math.min(d * 0.2, 45);
+      const e = (1 - p.attrs.vision) * Math.min(d * 0.2, 45) * touchF;
       const x = q.x + gauss() * e, y = q.y + gauss() * e;
       writeMem(p, q.id, x, y, q.vx, q.vy);
       v[q.id] = { x, y, conf: 1, ref: q };
@@ -1115,11 +1122,19 @@ function fireKick(p) {
   const a = p.windAct;
   ball.ctrl = null;
   ball.lastTouch = p;
-  ball.alt = a.alt; ball.altV = a.alt > 0 ? clamp(dist2(p.x, p.y, a.tx, a.ty) * 0.8, 180, 380) : 0;
+  let tx = a.tx, ty = a.ty;
+  // 踉跄 Debuff(非禁止):踉跄中仍能出球,但重心不稳→瞄准点大幅漂移
+  if (p.stagger > 0) {
+    const sw = 60 + p.stagger * 90;
+    tx = clamp(tx + (Math.random() - 0.5) * 2 * sw, X0 + 24, X1 - 24);
+    ty = clamp(ty + (Math.random() - 0.5) * 2 * sw, Y0 + 24, Y1 - 24);
+    p.label = '踉跄出球'; p.labelT = 0.8;
+  }
+  ball.alt = a.alt; ball.altV = a.alt > 0 ? clamp(dist2(p.x, p.y, tx, ty) * 0.8, 180, 380) : 0;
   ball.bend = a.bend || 0;
-  const d = Math.max(1, dist2(p.x, p.y, a.tx, a.ty));
-  ball.vx = (a.tx - p.x) / d * a.sp;
-  ball.vy = (a.ty - p.y) / d * a.sp;
+  const d = Math.max(1, dist2(p.x, p.y, tx, ty));
+  ball.vx = (tx - p.x) / d * a.sp;
+  ball.vy = (ty - p.y) / d * a.sp;
   p.cd = { pass: 0.35, shot: 0.3, dribble: 0.25, clear: 0.5, trick: 0.3 }[a.type] || 0.3;
   p.windAct = null;
   if (a.type === 'pass') {
@@ -1131,7 +1146,7 @@ function fireKick(p) {
     log(`${nameOf(p)} ${a.alt > 15 ? '高空球' : '传球'} → ${nameOf(a.t)}`, '');
   } else if (a.type === 'shot') {
     p.stats.shot++;
-    if (Math.abs(a.ty - GOAL_Y) <= GOAL_H / 2) p.stats.shotOn++;
+    if (Math.abs(ty - GOAL_Y) <= GOAL_H / 2) p.stats.shotOn++;
     if (p.team === 'A') xgA += a.xg; else xgB += a.xg;
     p.label = a.alt > 15 ? '挑射' : '射门'; p.labelT = 0.8;
     log(`${nameOf(p)} ${a.alt > 15 ? '挑射!' : '射门!'}`, '');
@@ -1217,6 +1232,22 @@ function step(dt) {
     // 朝向:移动方向(速度过低保持原朝向)
     const pspd = Math.hypot(p.vx, p.vy);
     if (pspd > 15) p.facing = Math.atan2(p.vy, p.vx);
+    // 观察(转头)并行层:独立于动作/决策的最小单元——
+    // 无球时周期性摆头扫描信息;持球被贴时频繁转头找队友(信息价值随压力上升)
+    if (p.headT > 0) {
+      p.headT -= dt;
+      if (p.headT <= 0) { p.headA = 0; p.headIdle = 0.5 + Math.random() * 1.3; }
+    } else if (p.headIdle > 0) {
+      p.headIdle -= dt;
+    } else {
+      let ang = 0;
+      if (ball.ctrl === p && touchOpps(p, 70).length > 0) ang = (Math.random() < 0.5 ? -1 : 1) * (15 + Math.random() * 25);
+      else if (ball.ctrl !== p) ang = (Math.random() < 0.5 ? -1 : 1) * (25 + Math.random() * 35);
+      else ang = (Math.random() < 0.5 ? -1 : 1) * (8 + Math.random() * 16);
+      p.headA = ang;
+      p.headT = 0.4 + Math.random() * 0.6;
+    }
+    p.lookAt = p.facing + p.headA;
     if (simT >= p.decideAt) { decide(p); p.decideAt = simT + p.react * (1 + Math.random() * 1.2); }
 
     // 蓄力:站定准备,期间可能被抢断;完成后出球
@@ -1238,9 +1269,11 @@ function step(dt) {
         const d = dist2(p.x, p.y, opp.x, opp.y);
         if (d < 40) { if (p.target) p.thrust *= 0.25; }
         if (d < 32) p.thrust = 0;
-        if (p.pressCd <= 0 && opp.stagger <= 0 && (Math.hypot(p.vx, p.vy) > 25 || p.windup > 0)) {
+        if (p.pressCd <= 0 && (Math.hypot(p.vx, p.vy) > 25 || p.windup > 0)) {
           p.pressCd = 0.4;
-          const pDef = (0.30 + 0.30 * opp.attrs.body / (opp.attrs.body + p.attrs.body)) * (p.sprint ? 0.5 : 1);
+          // 踉跄 = Debuff 而非禁止:踉跄者仍能伸脚抢,但成功率 ×0.35(重心没稳住)
+          const staggerPen = opp.stagger > 0 ? 0.35 : 1;
+          const pDef = (0.30 + 0.30 * opp.attrs.body / (opp.attrs.body + p.attrs.body)) * (p.sprint ? 0.5 : 1) * staggerPen;
           opp.stats.tackle++;
           if (Math.random() < pDef) {
             takeBall(opp);
@@ -1345,13 +1378,25 @@ function step(dt) {
       if (hit) {
       const fast = Math.hypot(ball.vx, ball.vy) > 250;
       if (hit.stagger > 0) {
-        // 踉跄者挡不住球:球从身边滑过,只被轻微减速
-        const dm = Math.max(1, Math.hypot(ball.vx, ball.vy));
-        const nx = dm > 1 ? ball.vx / dm : (ball.x - hit.x) / Math.max(1, dist2(ball.x, ball.y, hit.x, hit.y));
-        const ny = dm > 1 ? ball.vy / dm : (ball.y - hit.y) / Math.max(1, dist2(ball.x, ball.y, hit.x, hit.y));
-        ball.x = hit.x + nx * (PR + BR + 2);
-        ball.y = hit.y + ny * (PR + BR + 2);
-        ball.vx *= 0.92; ball.vy *= 0.92;
+        if (Math.random() < 0.3) {
+          // 踉跄 Debuff(非禁止):30% 勉强伸脚碰偏球(变向减速),70% 球从身边滑过
+          const dm = Math.max(1, Math.hypot(ball.vx, ball.vy));
+          const nx = ball.vx / dm, ny = ball.vy / dm;
+          ball.vx = nx * dm * 0.55;
+          ball.vy = ny * dm * 0.55 + (Math.random() - 0.5) * 120;
+          ball.x = hit.x + nx * (PR + BR + 2);
+          ball.y = hit.y + ny * (PR + BR + 2);
+          hit.cd = Math.max(hit.cd, 0.15);
+          hit.label = '勉强碰球'; hit.labelT = 0.6;
+        } else {
+          // 踉跄者挡不住球:球从身边滑过,只被轻微减速
+          const dm = Math.max(1, Math.hypot(ball.vx, ball.vy));
+          const nx = dm > 1 ? ball.vx / dm : (ball.x - hit.x) / Math.max(1, dist2(ball.x, ball.y, hit.x, hit.y));
+          const ny = dm > 1 ? ball.vy / dm : (ball.y - hit.y) / Math.max(1, dist2(ball.x, ball.y, hit.x, hit.y));
+          ball.x = hit.x + nx * (PR + BR + 2);
+          ball.y = hit.y + ny * (PR + BR + 2);
+          ball.vx *= 0.92; ball.vy *= 0.92;
+        }
       } else if (fast && ball.lastTouch && ball.lastTouch.team === hit.team) {
         takeBall(hit);
       } else if (fast) {
@@ -1610,7 +1655,7 @@ function draw() {
     for (const p of allPlayers()) {
       ctx.beginPath();
       ctx.moveTo(p.x, p.y);
-      ctx.arc(p.x, p.y, VISION_R, p.facing - va, p.facing + va);
+      ctx.arc(p.x, p.y, VISION_R, p.lookAt - va, p.lookAt + va);
       ctx.closePath();
       ctx.fillStyle = p.team === 'A' ? 'rgba(248,81,73,.08)' : 'rgba(88,166,255,.08)';
       ctx.fill();
