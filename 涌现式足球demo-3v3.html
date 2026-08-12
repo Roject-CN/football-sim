@@ -291,8 +291,8 @@ const aiVerOf = (p) => AI_VER[p.team];
 // 力场参数(Step1 默认值,后续进调参面板)
 const FT = {
   homeStr: 260, homeShift: 0.5, ballStr: 260, goalStr: 320,
-  structK: 0.5, structR: 110, markBase: 240,
-  spaceStr: 300, spaceBW: 70, spaceAspect: 1.6, chanStr: 210,
+  structK: 0.5, structR: 110, markBase: 234,
+  spaceStr: 300, spaceBW: 70, spaceAspect: 1.6, chanStr: 197,
   aggro: 1, recoverRate: 2.5
 };
 // 攻/防权重模板:职责 = 权重投影,同一范式(0~1,乘各力强度)
@@ -2013,7 +2013,7 @@ document.getElementById('btnDefault').addEventListener('click', () => {
     const inp = document.querySelector('#panel input[data-k="' + k + '"]');
     if (inp) { inp.value = d[k]; inp.nextElementSibling.textContent = d[k].toFixed(2); }
   }
-  const dft = { homeStr: 260, homeShift: 0.5, ballStr: 260, goalStr: 320, structK: 0.5, structR: 110, markBase: 240, spaceStr: 300, spaceBW: 70, spaceAspect: 1.6, chanStr: 210, aggro: 1, recoverRate: 2.5 };
+  const dft = { homeStr: 260, homeShift: 0.5, ballStr: 260, goalStr: 320, structK: 0.5, structR: 110, markBase: 234, spaceStr: 300, spaceBW: 70, spaceAspect: 1.6, chanStr: 197, aggro: 1, recoverRate: 2.5 };
   for (const k in dft) FT[k] = dft[k];
   syncFT();
   document.querySelectorAll('#tacBtns button').forEach(b => b.classList.toggle('on', b.dataset.t === 'balanced'));
