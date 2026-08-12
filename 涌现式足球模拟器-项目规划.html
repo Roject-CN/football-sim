@@ -428,6 +428,23 @@
 
       <h3>11.5 威胁度公式(用作 Gain/Loss 的后果评估,不是站位驱动力)</h3>
       <div class="card"><div class="v">Threat(x,y) = 推进价值 exp(−距球门/320) × 空间价值 min(距防守者距离)/150 × 通道价值 × 球员能力(0.5+0.5×射门)(0.5+0.5×速度) × 动量(0.5+0.5×dot(速度,朝向球门))。<br>站位用空间价值(过程指标),威胁度只用于评估"打穿的收益"与"被反击的损失"——防止阵地战倒脚。</div></div>
+
+      <h3>11.6 R4 控球者效用重构(定稿)</h3>
+      <div class="card"><div class="v"><b>U(动作) = 收益(0~1) × 成功率估计(0~1) × 风格权重 × 风险系数</b><br>
+      所有效用归一化到 0~1(解决原版各动作量纲不一、权重不可预测的问题);噪声改为比例噪声(±10%)。</div></div>
+      <table>
+        <tr><th>动作</th><th>成功率估计(草案)</th><th>收益</th></tr>
+        <tr><td>空门射门</td><td class="dim">≈ 0.90</td><td class="dim">距门越近越高</td></tr>
+        <tr><td>干扰下射门</td><td class="dim">≈ 0.30</td><td class="dim">同上 ×0.6</td></tr>
+        <tr><td>传空位队友</td><td class="dim">≈ 0.85</td><td class="dim">推进量(预测落点)</td></tr>
+        <tr><td>被盯防传球</td><td class="dim">≈ 0.35</td><td class="dim">推进量</td></tr>
+        <tr><td>高空球(通道被挡时)</td><td class="dim">≈ 0.55</td><td class="dim">推进量(越远越划算)</td></tr>
+        <tr><td>直塞身后</td><td class="dim">≈ 0.25(高风险高回报)</td><td class="dim">推进量 ×1.8</td></tr>
+        <tr><td>过人</td><td class="dim">盘带 / (盘带 + 防守)(已有雏形)</td><td class="dim">摆脱后的空间</td></tr>
+        <tr><td>带球</td><td class="dim">1 − 被逼抢程度</td><td class="dim">推进 + 保持球权</td></tr>
+      </table>
+      <p class="dim" style="margin-top:10px"><b>风险系数 = f(比分, 剩余时间, 破局计时器)</b>:落后/末段 → 愿意赌低成功率高收益的动作(直塞/远射);领先 → 偏向高成功率动作。<br>
+      <b>数值策略</b>:成功率表先用<b>静态查表</b>,管线跑 3 档对比(如干扰下射门 0.2/0.3/0.4 各 10 场),挑行为最像真实足球的档位;验证后再升级为<b>动态估计</b>(由感知数据算连续函数)。</p>
     </section>
 
     <!-- 12 自动化管线 -->
@@ -448,7 +465,7 @@
       <div class="stack">
         <div class="layer" style="--lc:#3fb950"><div class="ln">① 抽取</div><div class="ld">从 demo HTML 抽取游戏逻辑,无头运行——单一真源,不改 demo 文件</div></div>
         <div class="layer" style="--lc:#58a6ff"><div class="ln">② 对局</div><div class="ld">每配置 N 场 90s 完整比赛,收集:比分/控球/射门/传球(地面·高空)/成功率/头球/拦截/抢断/过人,含每场明细</div></div>
-        <div class="layer" style="--lc:#d29922"><div class="ln">③ 报告</div><div class="ld">data/runs/&lt;时间戳&gt;/report.md —— 对比表(均值±标准差)+ 每场明细 + 5 个预设的观察问题</div></div>
+        <div class="layer" style="--lc:#d29922"><div class="ln">③ 报告</div><div class="ld">data/runs/&lt;时间戳&gt;/report.html —— 深色主题对比表(均值±标准差)+ 每场明细 + 5 个预设的观察问题(仓库统一 HTML)</div></div>
         <div class="layer" style="--lc:#3fb950"><div class="ln">④ 分析</div><div class="ld">LLM/人在对话中读报告,回答观察问题,定位失衡/抖动,给出下一轮参数建议</div></div>
         <div class="layer" style="--lc:#58a6ff"><div class="ln">⑤ 迭代</div><div class="ld">改参数/改规则 → 重跑;完成后自动删除旧轮 data/runs 目录,只留最新</div></div>
       </div>
@@ -458,7 +475,7 @@
         <tr><th>配置</th><th>指纹</th><th>信号</th></tr>
         <tr><td>传控</td><td class="dim">地面传球 116 / 高空 10 / 抢断 35.5</td><td class="dim" style="color:var(--green-bright)">符合预期</td></tr>
         <tr><td>高位逼抢</td><td class="dim">拦截 21(全场最高)</td><td class="dim" style="color:var(--green-bright)">符合预期</td></tr>
-        <tr><td>长传反击</td><td class="dim">进球 9±2,比分 7:0 / 7:4</td><td class="dim" style="color:var(--gold)">疑似失衡,待验证(是否机制问题:头球/落点无人盯防)</td></tr>
+        <tr><td>长传反击</td><td class="dim">首轮 7:0/7:4(疑似失衡)→ 二轮 3 场 5:2/3:4/4:4</td><td class="dim" style="color:var(--gold)">方差大,非系统性失衡,继续观察</td></tr>
       </table>
     </section>
 

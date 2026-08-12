@@ -142,46 +142,88 @@ function aggregate(matches) {
   return out;
 }
 
-// ---------- 报告生成 ----------
+// ---------- 报告生成(HTML,仓库统一格式) ----------
 function buildReport(runDir, results) {
-  const keys = ['goals', 'shots', 'groundPass', 'loft', 'headers', 'intc', 'tack', 'trickWon', 'possRed', 'pass', 'passPct', 'trickPct', 'tackPct', 'intcPct', 'headPct'];
-  const lines = [];
-  lines.push('# 自动化评估报告');
-  lines.push('');
-  lines.push(`- 生成时间: ${new Date().toLocaleString()}`);
-  lines.push(`- 每套配置场数: ${results[0].agg.goals.mean >= 0 ? '' : ''}${results[0].matches.length}`);
-  lines.push('');
-  lines.push('## 对比表(均值 ± 标准差)');
-  lines.push('');
-  lines.push('| 配置 | 比分 | 进球 | 射门 | 地面传球 | 高空球 | 传球成功率% | 头球 | 拦截 | 抢断 | 过人成功 | 控球(红)% |');
-  lines.push('|------|------|------|------|---------|--------|-----------|------|------|------|---------|-----------|');
+  const t = (h) => `<tr>${h}</tr>`;
+  const th = (s) => `<th>${s}</th>`;
+  const td = (s, cls) => `<td${cls ? ' class="' + cls + '"' : ''}>${s}</td>`;
+
+  let cmpRows = '';
   for (const r of results) {
     const a = r.agg;
-    const scoreStr = a.score.join(' / ');
-    lines.push(`| **${r.name}** | ${scoreStr} | ${fmt(a.goals)} | ${fmt(a.shots)} | ${fmt(a.groundPass)} | ${fmt(a.loft)} | ${fmt(a.passPct)} | ${fmt(a.headers)} | ${fmt(a.intc)} | ${fmt(a.tack)} | ${fmt(a.trickWon)} | ${fmt(a.possRed)} |`);
+    cmpRows += t(td(`<b>${r.name}</b>`) + td(a.score.join(' / ')) + td(fmt(a.goals)) + td(fmt(a.shots))
+      + td(fmt(a.groundPass)) + td(fmt(a.loft)) + td(fmt(a.passPct)) + td(fmt(a.headers))
+      + td(fmt(a.intc)) + td(fmt(a.tack)) + td(fmt(a.trickWon)) + td(fmt(a.possRed)));
   }
-  lines.push('');
-  lines.push('## 每场明细');
-  lines.push('');
+
+  let detail = '';
   for (const r of results) {
-    lines.push(`### ${r.name}`);
-    lines.push('');
-    lines.push('| 场次 | 比分 | 进球 | 射门 | 传球 | 成功率% | 高空 | 头球 | 拦截 | 抢断 | 过人 | 控球红% |');
-    lines.push('|------|------|------|------|------|--------|------|------|------|------|------|--------|');
+    let rows = '';
     r.matches.forEach((m, i) => {
-      lines.push(`| ${i + 1} | ${m.score} | ${m.goals} | ${m.shots} | ${m.pass} | ${m.passPct} | ${m.loft} | ${m.headers} | ${m.intc} | ${m.tack} | ${m.trickWon} | ${m.possRed} |`);
+      rows += t(td(i + 1) + td(m.score) + td(m.goals) + td(m.shots) + td(m.pass) + td(m.passPct)
+        + td(m.loft) + td(m.headers) + td(m.intc) + td(m.tack) + td(m.trickWon) + td(m.possRed));
     });
-    lines.push('');
+    detail += `<h3>${r.name}</h3><table><thead>${t(th('场次') + th('比分') + th('进球') + th('射门') + th('传球') + th('成功率%') + th('高空') + th('头球') + th('拦截') + th('抢断') + th('过人') + th('控球红%'))}</thead><tbody>${rows}</tbody></table>`;
   }
-  lines.push('## 给分析者(LLM/人)的观察问题');
-  lines.push('');
-  lines.push('1. 哪种配置的射门转化率最高/最低?为什么(结合传球成功率、高空球占比)?');
-  lines.push('2. 传球成功率与拦截次数是否相关?防守配置(防线深度/逼抢强度)的影响是否可辨?');
-  lines.push('3. 是否存在明显失衡(如某配置进球远高于其他)?是参数问题还是机制问题?');
-  lines.push('4. 方差最大的指标是哪个?是否说明某些行为不稳定(抖动/扎堆)?');
-  lines.push('5. 下一轮建议:改哪些参数、预期观察到什么变化?');
-  lines.push('');
-  return lines.join('\n');
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>自动化评估报告 · ${new Date().toLocaleString()}</title>
+<style>
+  :root { --bg:#0d1117; --bg-soft:#161b22; --card:#1c2330; --line:#2d3748; --green:#3fb950;
+    --green-bright:#56d364; --gold:#d29922; --red:#f85149; --blue:#58a6ff;
+    --text:#e6edf3; --text-dim:#9aa4b2; --text-faint:#6e7681; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+    line-height:1.7; padding:32px 20px 60px;
+    background-image: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(63,185,80,.10), transparent); }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .kickoff { display:inline-block; font-size:12px; letter-spacing:.15em; color:var(--green-bright);
+    border:1px solid rgba(63,185,80,.4); background:rgba(63,185,80,.08); padding:4px 14px; border-radius:999px; margin-bottom:14px; }
+  h1 { font-size:26px; letter-spacing:-.02em; }
+  .sub { color:var(--text-dim); font-size:13.5px; margin:8px 0 4px; }
+  h2 { font-size:17px; color:var(--green-bright); margin:28px 0 10px; }
+  h3 { font-size:15px; margin:20px 0 8px; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; background:var(--card); border-radius:10px; overflow:hidden; margin-top:10px; }
+  th,td { padding:7px 12px; text-align:center; border-bottom:1px solid var(--line); }
+  th { color:var(--green-bright); font-weight:600; background:rgba(63,185,80,.06); }
+  tr:last-child td { border-bottom:none; }
+  td:first-child { text-align:left; }
+  .warn { color:var(--gold); }
+  .ok { color:var(--green-bright); }
+  .bad { color:var(--red); }
+  .qa { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 18px; margin-top:10px; }
+  .qa li { font-size:13px; color:var(--text-dim); padding:3px 0; }
+  footer { text-align:center; color:var(--text-faint); font-size:12px; margin-top:36px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kickoff">AUTO-EVAL PIPELINE · ITERATION REPORT</div>
+  <h1>自动化评估报告</h1>
+  <div class="sub">生成时间: ${new Date().toLocaleString()} · 每套配置 ${results[0].matches.length} 场 · 数据目录: <span style="font-family:monospace">data/runs/</span>(旧轮自动清理)</div>
+
+  <h2>对比表(均值 ± 标准差)</h2>
+  <table><thead>${t(th('配置') + th('比分') + th('进球') + th('射门') + th('地面传球') + th('高空球') + th('传球成功率%') + th('头球') + th('拦截') + th('抢断') + th('过人成功') + th('控球红%'))}</thead><tbody>${cmpRows}</tbody></table>
+
+  <h2>每场明细</h2>
+  ${detail}
+
+  <h2>给分析者(LLM/人)的观察问题</h2>
+  <div class="qa"><ol>
+    <li>哪种配置的射门转化率最高/最低?为什么(结合传球成功率、高空球占比)?</li>
+    <li>传球成功率与拦截次数是否相关?防守配置(防线深度/逼抢强度)的影响是否可辨?</li>
+    <li>是否存在明显失衡(如某配置进球远高于其他)?是参数问题还是机制问题?</li>
+    <li>方差最大的指标是哪个?是否说明某些行为不稳定(抖动/扎堆)?</li>
+    <li>下一轮建议:改哪些参数、预期观察到什么变化?</li>
+  </ol></div>
+
+  <footer>涌现式足球模拟器 · 自动化评估管线 · 数值由实验决定,不靠拍脑袋</footer>
+</div>
+</body>
+</html>`;
 }
 function fmt(v) { return typeof v === 'object' ? `${v.mean}±${v.sd}` : String(v); }
 
@@ -229,9 +271,9 @@ function main() {
   }
 
   const report = buildReport(runDir, results);
-  fs.writeFileSync(path.join(runDir, 'report.md'), report, 'utf8');
-  console.log(`[完成] 报告: data/runs/${stamp}/report.md`);
-  console.log(report.split('\n').slice(0, 20).join('\n'));
+  fs.writeFileSync(path.join(runDir, 'report.html'), report, 'utf8');
+  console.log(`[完成] 报告: data/runs/${stamp}/report.html`);
+  console.log(`[结果] ${results.map(r => `${r.name}: ${r.matches.map(m => m.score).join(' ')}`).join(' | ')}`);
   cleanOldRuns(runDir);
 }
 
