@@ -766,10 +766,13 @@ function gkDecide(p, pb, dg) {
       return;
     }
   }
-  // 选位:站"球→门中心"连线,封角度
+  // 选位:站"球→门中心"连线,球越近越适度前压(在禁区内活动,不贴底线)
   const offY = clamp(GOAL_Y + (ball.y - GOAL_Y) * 0.6, GOAL_Y - GOAL_H / 2 + 16, GOAL_Y + GOAL_H / 2 - 16);
-  seekTarget(p, gkx + 12 * dg, offY, 620);
-  p.action = '选位';
+  const bdg = Math.abs(ball.x - gkx);
+  const depth = bdg < 420 ? (420 - bdg) / 420 : 0;
+  const gkX = gkx + dg * (12 + depth * (AREA_D * 0.75));
+  seekTarget(p, clamp(gkX, X0 + 6, X1 - 6), offY, 620);
+  p.action = depth > 0.35 ? '封角度' : '选位';
 }
 
 // 门将开大脚:找推进最深的队友,或往纵深空旷处(高空球)
@@ -1159,8 +1162,8 @@ function step(dt) {
       } else { p.windup = 0; p.windAct = null; }
     }
 
-    // 控球者被贴身:减速 + 可能被抢断(触觉感知——被贴着不用看)
-    if (ball.ctrl === p) {
+    // 控球者被贴身:减速 + 可能被抢断(触觉感知——被贴着不用看);门将手拿球除外,无人能抢
+    if (ball.ctrl === p && !p.isGK) {
       const opp = touchOpps(p, 56)[0] || null;
       if (opp) {
         const d = dist2(p.x, p.y, opp.x, opp.y);
