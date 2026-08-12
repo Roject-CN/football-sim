@@ -1003,16 +1003,17 @@ function startShot(p) {
   const e = (1 - p.attrs.shoot) * 90;
   const ty = GOAL_Y + (Math.random() - 0.5) * 2 * e;
   const gd = dist2(p.x, p.y, goalX(p), GOAL_Y);
-  const sp = clamp(gd * 2.0, 300, 760);
-  const power = clamp((sp - 300) / 460, 0, 1);
-  p.windup = TUN.wind * (0.08 + 0.38 * power);
+  // 力度由距离决定:贴脸=轻推(瞬时出脚),远射=爆射(蓄力);不再强制 300 下限
+  const sp = clamp(gd * 1.8, 140, 760);
+  const power = clamp((sp - 140) / 620, 0, 1);
+  p.windup = TUN.wind * (0.02 + 0.40 * power);
   // xG:射门时的预期进球(与射门效用同模型)
   const gk = gkOf(p.team === 'A' ? 'B' : 'A');
   const gkF = gk ? gkCoverage(gk, gd, GOAL_Y) : 0.5;
   const succBase = gd < 200 ? 0.9 : 0.6;
   const xg = succBase * (1 - gkF);
   p.windAct = { type: 'shot', ty, sp, xg };
-  p.label = '蓄力·射门'; p.labelT = 1.0;
+  p.label = '蓄力·射门'; p.labelT = Math.min(1.0, 0.35 + p.windup * 2);  // 近射标签一闪而过
 }
 
 function firePass(p) {
