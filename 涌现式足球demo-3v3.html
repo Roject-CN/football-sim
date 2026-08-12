@@ -1145,11 +1145,34 @@ function fireShot(p) {
   log(`${nameOf(p)} ${a.loft ? '挑射!' : '射门!'}`, '');
 }
 
-// 趟球(带球的大步推进执行方式):一脚把球趟出再追——距离/速度按"到达时间"反推,趟大了会被断/出界
+// 趟球(带球的大步推进执行方式):力度由局势连续决定——
+//  空间越大/追兵越近 → 趟得越远(推进/甩开);边线/底线/门将/空间余量 → 收窄上限
 function doBurst(p) {
   const dg = dirX(p);
-  const dist = 110 + 70 * p.attrs.speed + Math.random() * 50;   // 趟出 110~230px
-  const t = 0.55 + Math.random() * 0.2;                         // 0.55~0.75s 到达
+  // 追兵距离(身前/侧面的对手):追得越紧,趟得越远
+  let chase = 1e9;
+  for (const o of oppsOf(p)) {
+    const d = dist2(o.x, o.y, p.x, p.y);
+    if (d < chase && (o.x - p.x) * dg > -40) chase = d;
+  }
+  // 前方空间(朝球门方向的最近对手):空间越大趟得越远
+  let ahead = 1e9;
+  for (const o of oppsOf(p)) {
+    const d = dist2(o.x, o.y, p.x, p.y);
+    if ((o.x - p.x) * dg > 0 && d < ahead) ahead = d;
+  }
+  const chaseFactor = chase < 1e9 ? clamp(1.5 - chase / 200, 0.6, 1.4) : 0.6;  // 追兵越近趟得越远
+  const spaceFactor = clamp(ahead / 260, 0.25, 1.2);                              // 前方空间主导
+  // 空间主导 + 追兵修正 + 速度属性:开阔→大步推进,拥挤→短趟控球
+  let dist = clamp(45 + 130 * spaceFactor * (chaseFactor * 0.8) + 15 * p.attrs.speed, 50, 280);
+  // 约束收窄:不趟出边线/底线,不趟进门将怀里(门将离位时留出安全余量)
+  let room = 1e9;
+  const gk = gkOf(p.team === 'A' ? 'B' : 'A');
+  room = Math.min(room, dg > 0 ? (X1 - 40 - p.x) : (p.x - 40 - X0));  // 边线/底线余量
+  if (gk && (gk.x - p.x) * dg > 0) room = Math.min(room, Math.abs(gk.x - p.x) - 60);  // 门将身前 60px 停球
+  room = Math.max(room, 30);
+  dist = Math.min(dist, room);
+  const t = 0.5 + Math.random() * 0.25;
   const v0 = dist / ((1 - Math.exp(-0.5 * t)) / 0.5);
   ball.ctrl = null;
   ball.lastTouch = p;
