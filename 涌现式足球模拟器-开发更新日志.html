@@ -74,7 +74,28 @@
   </header>
 
   <div class="v" style="--vc:#3fb950">
-    <div class="vhead"><span class="vname">v1.0 · 战术系统</span><span class="vtag">最新</span><span class="vdate">2026-08-12</span></div>
+    <div class="vhead"><span class="vname">v2.0 · 智能重构(感知/记忆/效用规则)</span><span class="vtag">最新</span><span class="vdate">2026-08-12</span></div>
+    <div class="vquote"><b>目标:</b>把设计定稿的"感知层 + 上下文记忆 + 基本规则集"全部落地,让 AI 从"反应式"变"预测式"。</div>
+    <div class="sec">实现</div>
+    <ul>
+      <li><b>感知层</b>:视野锥(120°/380px)+ 对手遮挡(队友不挡视线)+ 高斯误差 σ∝距离 + <b>触觉压力感知</b>(70px 全方向,盲区也知道被贴着)</li>
+      <li><b>记忆层</b>:环形缓冲 30 条 + 一阶外推预测(T=0.35s,置信度衰减)+ <b>默契度</b>(队友被遮挡用战术期望填补,不清空)</li>
+      <li><b>R4 效用重构</b>:U = 收益 × 成功率估计 × 风格权重 × 风险系数(量纲统一 0~1,成功率查表初版)</li>
+      <li><b>R1 期望值空间价值</b>:支援站位 V = P×Gain − (1−P)×Loss + 站两防守者之间的"创造空间"加分</li>
+      <li><b>R6 破局计时器 + 解围</b>:被包围 3s 无路可走 → 生理性大脚解围 / 仓促射门</li>
+      <li><b>定位球现实化</b>:边线球(不再弹墙壁)+ 球门球双方站位复位</li>
+    </ul>
+    <div class="sec">重大 bug 修复:系统性失衡</div>
+    <ul>
+      <li class="fix"><b>现象</b>:重构后红队 0 胜 6 负,比分 0:15</li>
+      <li class="fix"><b>定位</b>:翻转攻击方向实验 → 失衡跟随"攻左"而非红蓝标签;dump 状态流发现:追身逼抢者在持球者<b>背后</b>,持球者的视野快照看不见他 → 对抗掷骰永不触发 → 谁抢到球谁就能无人阻拦带到球门</li>
+      <li class="fix"><b>修复</b>:触觉/视野分离——<b>压力与抢断用触觉(全方向,不看也知道),视野只负责认知层</b>(站位/传球/过人)</li>
+    </ul>
+    <div class="data">修复后 6 场:红胜 3 / 蓝胜 1 / 平 2;抢断 39~48/场,拦截 10~17/场,传球 73~105/场。管线全量采样(位置/力/动作/球 0.5s)已接入。</div>
+  </div>
+
+  <div class="v" style="--vc:#3fb950">
+    <div class="vhead"><span class="vname">v1.0 · 战术系统</span><span class="vtag">上一版</span><span class="vdate">2026-08-12</span></div>
     <div class="vquote"><b>目标:</b>不同打法肉眼可区分——把"战术"从参数名变成按钮。</div>
     <div class="sec">新增</div>
     <ul>

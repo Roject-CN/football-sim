@@ -166,7 +166,7 @@
   <div class="meta-row">
     <span class="pill">引擎: Godot 4 / 当前 HTML+JS 沙盒</span>
     <span class="pill">路线: 力场叠加 + 阈值触发器</span>
-    <span class="pill">版本: v1.0 可玩(3v3)</span>
+    <span class="pill">版本: v2.0 可玩(3v3)</span>
     <span class="pill">规模: 3v3 起步 → 11v11</span>
   </div>
 </header>
@@ -229,6 +229,20 @@
         <div class="progress-label" id="pl">已勾选 0 / 0 项(点击勾选,进度自动保存)</div>
       </div>
 
+      <h3>感知层(v2.0)<span class="tag done">已实现</span></h3>
+      <ul class="checklist" data-group="感知层">
+        <li><span class="box">✓</span><span><span class="txt">视野锥</span><span class="sub">朝向=移动方向,120° 张角,半径 380px;对手遮挡(队友不挡视线)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">高斯感知误差</span><span class="sub">σ ∝ 距离 × (1−vision),球始终可见但带误差</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">触觉压力感知</span><span class="sub">70px 内全方向"被贴着"(盲区也可被抢断)——视野管认知,触觉管身体</span></span></li>
+      </ul>
+
+      <h3>记忆层(v2.0)<span class="tag done">已实现</span></h3>
+      <ul class="checklist" data-group="记忆层">
+        <li><span class="box">✓</span><span><span class="txt">环形缓冲 + 一阶外推预测</span><span class="sub">30 条@10Hz,预测前瞻 0.35s,置信度随陈旧衰减</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">默契度</span><span class="sub">队友被遮挡不清空——用战术期望(锚点+球位偏移)填补,看不见也信任</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">感知快照</span><span class="sub">每次决策基于 view 快照,不直接读全局坐标;物理层仍用真实位置</span></span></li>
+      </ul>
+
       <h3>物理与空间<span class="tag done">已实现</span></h3>
       <ul class="checklist" data-group="物理空间">
         <li><span class="box">✓</span><span><span class="txt">2D 球场与球员</span><span class="sub">960×500,纵向 440px,红蓝各 3 人,无门将,圆盘碰撞</span></span></li>
@@ -237,26 +251,28 @@
         <li><span class="box">✓</span><span><span class="txt">第三维空间(高空球)</span><span class="sub">球有高度 alt/altV:重力 + 空中低阻力,初始高度 40 越过贴身逼抢</span></span></li>
       </ul>
 
-      <h3>决策系统<span class="tag done">已实现</span></h3>
+      <h3>决策系统(v2.0)<span class="tag done">已实现</span></h3>
       <ul class="checklist" data-group="决策">
-        <li><span class="box">✓</span><span><span class="txt">效用决策(5 候选)</span><span class="sub">射门/传球(地面·高空)/带球/过人,属性 + 局势 + 噪声取最大</span></span></li>
-        <li><span class="box">✓</span><span><span class="txt">阈值触发器</span><span class="sub">空门且 200px 内 → 无条件起脚(肾上腺素式硬触发)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">R4 效用重构</span><span class="sub">U = 收益×成功率估计×风格权重×风险系数,量纲统一到 0~1</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">阈值触发器</span><span class="sub">空门且 200px 内且附近无人 → 无条件起脚</span></span></li>
         <li><span class="box">✓</span><span><span class="txt">蓄力系统</span><span class="sub">准备时间 ∝ 力度:门前轻推 ≈0.08s,远射/长传 ≈0.4s;蓄力期间站定可被抢断</span></span></li>
         <li><span class="box">✓</span><span><span class="txt">无球角色 + 滞回</span><span class="sub">支援/逼抢/回防/抢球/补位,角色切换 0.4s 滞回防抖动</span></span></li>
         <li><span class="box">✓</span><span><span class="txt">接应 + 预测落点</span><span class="sub">传球瞬间接球者冲刺迎球;传球目标 = 位置 + 速度×飞行时间(传跑结合)</span></span></li>
-        <li><span class="box">✓</span><span><span class="txt">反击爆发</span><span class="sub">夺回球权瞬间全队 2.5s 冲刺前插 + 直塞权重翻倍 + 推进价值 ×2.2</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">反击爆发</span><span class="sub">夺回球权瞬间全队 2.5s 冲刺前插 + 直塞权重翻倍</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">R6 破局计时器 + 解围</span><span class="sub">耐心 3s 耗尽且被包围 → 大脚解围/仓促射门(生理性动作)</span></span></li>
       </ul>
 
-      <h3>空间价值定位<span class="tag done">已实现</span></h3>
+      <h3>空间价值定位(v2.0)<span class="tag done">已实现</span></h3>
       <ul class="checklist" data-group="空间">
-        <li><span class="box">✓</span><span><span class="txt">进攻支援打分</span><span class="sub">5×5 候选网格:开放度/传球通道/推进/宽度/车道,选最有利的点</span></span></li>
-        <li><span class="box">✓</span><span><span class="txt">防守封堵通道</span><span class="sub">站"球与球门之间"的线 + 站在持球者的传球路线上</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">R1 期望值空间价值</span><span class="sub">支援站位 V = P×Gain − (1−P)×Loss(打穿收益 vs 被反击损失)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">创造空间加分</span><span class="sub">站两个防守者之间(拉散防线)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">防守封堵通道</span><span class="sub">站"球与球门之间"的线 + 站在持球者的传球路线上(用预测位置)</span></span></li>
         <li><span class="box">✓</span><span><span class="txt">自由球补位</span><span class="sub">球与己方球门中点 + 车道/开放度</span></span></li>
       </ul>
 
       <h3>身体对抗与情绪<span class="tag done">部分</span></h3>
       <ul class="checklist" data-group="对抗">
-        <li><span class="box">✓</span><span><span class="txt">身体对抗掷骰</span><span class="sub">逼抢按双方"身体"属性定胜率(基础 0.30),胜者夺球、败者踉跄</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">身体对抗掷骰(触觉触发)</span><span class="sub">全方向 56px 贴身即对抗(追身可断),按双方"身体"属性定胜率</span></span></li>
         <li><span class="box">✓</span><span><span class="txt">踉跄状态</span><span class="sub">减速 45%、无法停球/拦截/抢断(球从身边滑过)——消除乒乓拦截</span></span></li>
         <li><span class="box">✓</span><span><span class="txt">头球系统</span><span class="sub">20~90 高度、40px 内争顶;攻方顶向球门、守方解围;0.35s 冷却</span></span></li>
         <li><span class="box"></span><span><span class="txt">情绪层</span><span class="sub">愤怒值 → 报复欲力场 → 冲突涌现(打架/围裁判/红牌)——规划中</span></span></li>
@@ -338,19 +354,11 @@
     <!-- 8 路线图 -->
     <section id="s8">
       <h2><span class="no">8</span>路线图</h2>
-      <h3>已实现(v1.0)<span class="tag done">可玩</span></h3>
+      <h3>已实现(v2.0)<span class="tag done">可玩</span></h3>
       <table>
         <tr><th>阶段</th><th>内容</th><th>状态</th></tr>
-        <tr><td>v0.1</td><td>1D 最小沙盒:效用决策 + 物理碰撞涌现拦截</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
-        <tr><td>v0.2</td><td>2D 升级:阵型锚点 + 斥力场 + 过人变向</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
-        <tr><td>v0.3</td><td>遥测日志 + 一键导出</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
-        <tr><td>v0.4</td><td>身体对抗掷骰 + 踉跄(消除乒乓拦截)</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
-        <tr><td>v0.5</td><td>空间价值定位 + 接应/预测落点/滞回</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
-        <tr><td>v0.6</td><td>高空球/头球(第三维空间)+ 球场加宽</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
-        <tr><td>v0.7</td><td>蓄力系统 + 赛后数据面板 + 调参面板</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
-        <tr><td>v0.8</td><td>活动热区图</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
-        <tr><td>v0.9</td><td>空门阈值 + 预测落点 + 高空球初始高度 + 对抗天平 + 日志分段</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
-        <tr><td>v1.0</td><td>战术预设 ×5 + 打法建议 + 反击爆发 + 4 新参数</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v0.1~v1.0</td><td>沙盒→空间价值→身体对抗→高空球→蓄力→战术预设(1D→2D 全历程)</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v2.0</td><td>感知层(视野锥/遮挡/高斯误差/触觉)+ 记忆层(预测/默契度)+ R4 效用 + R1 期望值 + 解围 + 边线球/球门球站位</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
       </table>
       <h3>下一步(按优先级)</h3>
       <div class="timeline">
@@ -365,12 +373,12 @@
 
     <!-- 9 验证 -->
     <section id="s9">
-      <h2><span class="no">9</span>验证记录</h2>
+      <h2><span class="no">9</span>验证记录(v2.0 基线)</h2>
       <div class="grid">
-        <div class="card"><div class="k">传球成功率</div><div class="v">81~87%(预测落点前 ~65%)</div></div>
-        <div class="card"><div class="k">高空球贴脸被拦</div><div class="v">0 次(初始高度修复后)</div></div>
-        <div class="card"><div class="k">战术指纹</div><div class="v">四种打法数据差异显著,肉眼可区分(见 4.2)</div></div>
-        <div class="card"><div class="k">稳定性</div><div class="v">120s 压力模拟无 NaN / 无卡死</div></div>
+        <div class="card"><div class="k">胜负均衡</div><div class="v">6 场:红胜 3 / 蓝胜 1 / 平 2(触觉修复前红 0 胜 6 负 0:15)</div></div>
+        <div class="card"><div class="k">抢断 / 拦截</div><div class="v">39~48 / 场 · 10~17 / 场(追身抢断恢复,拦截回归合理)</div></div>
+        <div class="card"><div class="k">传球</div><div class="v">73~105 次/场,成功率可观(预测落点 + 接应 + 默契度)</div></div>
+        <div class="card"><div class="k">战术指纹</div><div class="v">传控/高位逼抢可辨;防守反击 v2.0 下偏弱(1:4/2:6/3:7),待调参</div></div>
       </div>
     </section>
 
