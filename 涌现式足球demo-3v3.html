@@ -42,8 +42,10 @@
   .score { font-size: 26px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
   #scA { color: #f85149; } #scB { color: #58a6ff; }
   .vs { color: #6e7681; font-size: 18px; }
-  .info { color: #9aa4b2; font-size: 13px; display: flex; gap: 14px; }
+  .info { color: #9aa4b2; font-size: 13px; display: flex; gap: 14px; align-items: center; }
   #timer { color: #e6edf3; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .info label { display: flex; align-items: center; gap: 4px; }
+  .info select { background: #1c2330; color: #e6edf3; border: 1px solid #2d3748; border-radius: 6px; padding: 2px 6px; font-size: 12px; cursor: pointer; }
   .btns { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .btns button {
     background: #1c2330; color: #e6edf3; border: 1px solid #2d3748;
@@ -151,7 +153,11 @@
   <h1>涌现式足球模拟<span>3v3 · 2D 版(阵型 + 空间 + 高空球)</span></h1>
   <div id="hud">
     <div class="score"><span id="scA">0</span><span class="vs">:</span><span id="scB">0</span></div>
-    <div class="info"><span id="timer">90.0</span>s · <span id="pos">控球 红 50%</span></div>
+    <div class="info">
+      <span id="timer">90.0</span>s · <span id="pos">控球 红 50%</span>
+      <label>红 <select id="selNA"><option>1</option><option>2</option><option selected>3</option></select>人</label>
+      <label>蓝 <select id="selNB"><option>1</option><option>2</option><option selected>3</option></select>人</label>
+    </div>
     <div class="btns">
       <button id="btnPause">暂停</button>
       <button id="btnSpeed">速度 ×1</button>
@@ -241,10 +247,21 @@ let transT = { A: 0, B: 0 };  // 反击爆发计时(夺回球权后)
 
 function randAttr() { return 0.65 + Math.random() * 0.7; }
 
-function anchorsFor(team) {
+function teamCount(team) {
+  const el = document.getElementById(team === 'A' ? 'selNA' : 'selNB');
+  const v = +(el && el.value);
+  return isFinite(v) && v >= 1 && v <= 3 ? v : 3;
+}
+
+function anchorsFor(team, n) {
   const L = X1 - X0;
-  if (team === 'A') return [{ x: X0 + L * 0.22, y: GOAL_Y }, { x: X0 + L * 0.45, y: GOAL_Y - 120 }, { x: X0 + L * 0.45, y: GOAL_Y + 120 }];
-  return [{ x: X0 + L * 0.78, y: GOAL_Y }, { x: X0 + L * 0.55, y: GOAL_Y - 120 }, { x: X0 + L * 0.55, y: GOAL_Y + 120 }];
+  const arr = [{ x: X0 + L * (team === 'A' ? 0.22 : 0.78), y: GOAL_Y }];
+  const offs = [-120, 120, -60, 60, 0, -180, 180];
+  for (let i = 1; i < n; i++) {
+    const tier = Math.floor((i - 1) / 2);
+    arr.push({ x: X0 + L * (team === 'A' ? 0.45 + tier * 0.06 : 0.55 - tier * 0.06), y: GOAL_Y + offs[i - 1] });
+  }
+  return arr;
 }
 
 function makePlayer(team, idx, anchor) {
@@ -265,8 +282,11 @@ function makePlayer(team, idx, anchor) {
 }
 
 function kickoff() {
-  playersA = [0, 1, 2].map(i => makePlayer('A', i, anchorsFor('A')[i]));
-  playersB = [0, 1, 2].map(i => makePlayer('B', i, anchorsFor('B')[i]));
+  const nA = teamCount('A'), nB = teamCount('B');
+  playersA = Array.from({ length: nA }, (_, i) => makePlayer('A', i, anchorsFor('A', nA)[i]));
+  playersB = Array.from({ length: nB }, (_, i) => makePlayer('B', i, anchorsFor('B', nB)[i]));
+  initTlm();
+  bindHeat();
   ball = { x: (X0 + X1) / 2, y: GOAL_Y, vx: 0, vy: 0, alt: 0, altV: 0, headCd: 0, ctrl: null, lastTouch: null };
   trail.length = 0;
   scoreA = 0; scoreB = 0; matchT = 90; possA = 0; possB = 0; simT = 0;
@@ -527,7 +547,7 @@ function seekTarget(p, tx, ty, F) {
 }
 
 // ============ 空间价值定位(B 部分核心) ============
-const laneY = (p) => [GOAL_Y, GOAL_Y - 110, GOAL_Y + 110][p.idx];
+const laneY = (p) => [GOAL_Y, GOAL_Y - 110, GOAL_Y + 110][p.idx % 3];
 
 function lineDist(ax, ay, bx, by, px, py) {
   const dx = bx - ax, dy = by - ay;
@@ -1176,8 +1196,8 @@ function goalKick(team) {
 }
 
 function kickoffPositions() {
-  playersA.forEach((p, i) => { const a = anchorsFor('A')[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.feintAt = -10; });
-  playersB.forEach((p, i) => { const a = anchorsFor('B')[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.feintAt = -10; });
+  playersA.forEach((p, i) => { const a = anchorsFor('A', playersA.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.feintAt = -10; });
+  playersB.forEach((p, i) => { const a = anchorsFor('B', playersB.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.feintAt = -10; });
   ball.x = (X0 + X1) / 2; ball.y = GOAL_Y; ball.vx = 0; ball.vy = 0; ball.alt = 0; ball.altV = 0;
   ball.ctrl = null; ball.lastTouch = null;
   trail.length = 0;
@@ -1217,17 +1237,20 @@ function drawHeat(p) {
 let heatSel = null;
 function bindHeat() {
   const box = document.getElementById('heatBtns');
-  box.querySelectorAll('button').forEach(btn => {
+  box.innerHTML = '';
+  for (const p of allPlayers()) {
+    const btn = document.createElement('button');
+    btn.textContent = teamName[p.team] + (p.idx + 1);
+    btn.dataset.heat = p.team + p.idx;
     btn.addEventListener('click', () => {
       box.querySelectorAll('button').forEach(b => b.classList.remove('on'));
       btn.classList.add('on');
-      const team = btn.dataset.heat[0];
-      const idx = +btn.dataset.heat[1];
-      heatSel = (team === 'A' ? playersA : playersB)[idx];
+      heatSel = (p.team === 'A' ? playersA : playersB)[p.idx];
       drawHeat(heatSel);
       document.getElementById('heatName').textContent = btn.textContent + ' 活动热区';
     });
-  });
+    box.appendChild(btn);
+  }
 }
 
 function endMatch() {
@@ -1257,11 +1280,13 @@ function endMatch() {
   document.getElementById('heatWrap').classList.add('show');
   const box = document.getElementById('heatBtns');
   box.querySelectorAll('button').forEach(b => b.classList.remove('on'));
-  const b0 = box.querySelector('[data-heat="A0"]');
-  b0.classList.add('on');
-  heatSel = playersA[0];
-  drawHeat(heatSel);
-  document.getElementById('heatName').textContent = '红1 活动热区';
+  const b0 = box.querySelector('[data-heat="A0"]') || box.querySelector('button');
+  if (b0) {
+    b0.classList.add('on');
+    heatSel = playersA[0] || playersB[0];
+    drawHeat(heatSel);
+    document.getElementById('heatName').textContent = b0.textContent + ' 活动热区';
+  }
   document.getElementById('overlay').classList.remove('hidden');
 }
 
@@ -1360,6 +1385,14 @@ function draw() {
   ctx.lineWidth = 2;
   ctx.strokeStyle = '#111';
   ctx.stroke();
+  // 进球提示:画布上短暂显示,不打断比赛(不弹遮罩)
+  if (goalBanner > 0) {
+    const a = Math.min(1, goalBanner / 1.4);
+    ctx.font = 'bold 42px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(210,153,34,' + a.toFixed(3) + ')';
+    ctx.fillText(goalText, W / 2, 80);
+  }
 }
 
 // ============ HUD ============
@@ -1369,15 +1402,7 @@ function updateHUD() {
   document.getElementById('timer').textContent = matchT.toFixed(1);
   const pa = possA + possB > 0 ? Math.round(possA / (possA + possB) * 100) : 50;
   document.getElementById('pos').textContent = `控球 红 ${pa}%`;
-  if (goalBanner > 0) {
-    goalBanner -= 1 / 60 * speed;
-    document.getElementById('goalText').textContent = goalText;
-    document.getElementById('overlay').classList.remove('hidden');
-    if (goalBanner <= 0) {
-      document.getElementById('goalText').textContent = '';
-      document.getElementById('overlay').classList.add('hidden');
-    }
-  }
+  if (goalBanner > 0) goalBanner -= 1 / 60 * speed;
 }
 
 // ============ 主循环(固定时间步) ============
