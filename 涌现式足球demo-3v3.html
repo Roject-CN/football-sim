@@ -883,130 +883,16 @@ function decide(p) {
   if (holder === p) {
     if (p.cd > 0 || p.windup > 0) return;
     const gc = { x: goalX(p), y: GOAL_Y };
-    const gDist = dist2(p.x, p.y, gc.x, gc.y);
-    // 己方门前 100px 内拿到球:不玩火,直接解围(杜绝自家门口带球)
-    if (Math.abs(p.x - ownGoalX(p)) < 100 && gDist > 320) { clearBall(p); return; }
-    const vopps = viewOpps(p);
-    const opp = pressedBy(p, vopps);
-    const clear = clearShot(p, vopps);
-    // 压力感知:触觉(全方向 70px,盲区也有"被贴着"的感觉)
-    const touch = touchOpps(p, 70);
-    let nearPress = null, npd = 1e9;
-    for (const o of touch) {
-      const d = dist2(o.x, o.y, p.x, p.y);
-      if (d < npd) { npd = d; nearPress = o; }
-    }
-    const pressedN = touch.length;
-
-    // —— R6 破局计时器 + 11.7 解围 ——
+    // 耐心:反击中清零,持球越久越焦躁(冒险系数上升,保底项胜出概率增大)
     if (transT[p.team] > 0) p.patience = 0;
     else p.patience += 0.1;
-    const desperate = p.patience > 2.5;
-    // 解围触发:①被围困 2 人+ 且耐心耗尽(无出球线路) ②己方禁区内被贴身→直接大脚解围
-    const ownBox = dist2(p.x, p.y, ownGoalX(p), GOAL_Y) < 220;
-    if (ownBox && pressedN >= 1 && gDist > 280) { clearBall(p); return; }
-    if (desperate && pressedN >= 2) {
-      let anyChan = false;
-      for (const t of matesOf(p)) {
-        if (t === p) continue;
-        if (passLineClear(p.x, p.y, t.x, t.y, vopps)) { anyChan = true; break; }
-      }
-      if (!anyChan) {
-        if (gDist > 280) { clearBall(p); return; }
-        startShot(p, 1); p.label = '仓促射门'; p.labelT = 0.8; return;
-      }
-    }
-    const risk = teamRisk(p.team) + (desperate ? 0.3 : 0);
-
-    // —— R4 效用 = 收益 × 成功率估计 × 风格权重 × 风险 ——
-    const pressF = nearPress ? clamp(1 - dist2(nearPress.x, nearPress.y, p.x, p.y) / 70, 0, 1) : 0;
-    // 前方开阔度:空间也是资源——反抢后空旷就带球直接冲击
-    let aheadMin = gDist;
-    for (const o of vopps) {
-      const dx = o.x - p.x;
-      if (dx * dg > 0 && Math.abs(o.y - p.y) < 90 && Math.abs(dx) < aheadMin) aheadMin = Math.abs(dx);
-    }
-    const openSpace = clamp(aheadMin / 280, 0, 1);
-    const dribbleU = (0.15 + 0.45 * openSpace + p.attrs.speed * 0.06) * (1 - pressF * 0.6) * TUN.dribble * (transT[p.team] > 0 ? 1.25 : 1);
-
-    let shotU = 0;
-    // 角度:球门两柱张角(正对=大,边路=小)
-    const angTop = Math.atan2((GOAL_Y - GOAL_H / 2) - p.y, goalX(p) - p.x);
-    const angBot = Math.atan2((GOAL_Y + GOAL_H / 2) - p.y, goalX(p) - p.x);
-    const angleFactor = clamp(Math.abs(angTop - angBot) / 0.5, 0.25, 1);
-    // 门将覆盖:门将离位=空门,覆盖骤降
-    const oppGK = gkOf(p.team === 'A' ? 'B' : 'A');
-    const gkFactor = oppGK ? gkCoverage(oppGK, gDist, GOAL_Y + (p.y - GOAL_Y) * 0.3) : 0.5;
-    if (clear) {
-      // 全图射程:只要有空位就能打门,距离/角度只影响收益;门将决定成功率
-      const benefit = clamp(1 - gDist / 1000, 0.05, 1) * angleFactor;
-      // 门将贴身=1v1:推射/挑射成功率高(过门将的射门)
-      const gkClose = oppGK && dist2(oppGK.x, oppGK.y, p.x, p.y) < 80;
-      const succBase = gkClose ? 0.6 : (gDist < 200 ? 0.9 : 0.6);
-      const succ = succBase * (1 - gkFactor * (gkClose ? 0.55 : 1));
-      shotU = benefit * succ * TUN.shoot * risk;
-    } else if (gDist < 300) {
-      // 无空位:只有近距离才强行起脚(有被挡风险)
-      const benefit = (1 - gDist / 460) * angleFactor;
-      const succ = nearPress ? 0.25 : 0.4;
-      shotU = benefit * succ * (1 - gkFactor) * TUN.shoot * risk;
-    }
-
-    let passU = -1, passT = null, passLoft = false;
-    for (const t of matesOf(p)) {
-      if (t === p) continue;
-      // 门将与普通队友用同一套评估(ADR-9):门将通常无盯防+通道清→成功率高,
-      // 推进价值低→压力小时不选,压力大(前路被堵)时"回传更安全"自然胜出
-      // 预测落点:按飞行时间领到接球者的跑动位置——传跑结合
-      const dd = Math.max(1, dist2(p.x, p.y, t.x, t.y));
-      const Tf = dd / clamp(dd * 2.0, 300, 540);
-      const ptx = clamp(t.x + t.vx * Tf + dg * 12, X0 + 24, X1 - 24);
-      const pty = clamp(t.y + t.vy * Tf, Y0 + 24, Y1 - 24);
-      const isBackPass = (t.x - p.x) * dg < 0;  // 回传(朝己方方向)
-      const progN = clamp((((ptx - p.x) * dg) + 200) / 400, 0, 1.2);
-      let open = true;
-      for (const o of vopps) if (dist2(o.x, o.y, ptx, pty) < 55) open = false;
-      const chan = passLineClear(p.x, p.y, ptx, pty, vopps) ? 1 : 0;
-      const succG = (open ? 0.85 : 0.35) * (0.6 + 0.4 * chan);
-      const counterB = transT[p.team] > 0 ? 1.4 : 1;  // 反击中直塞优先(略降,给带球冲击留空间)
-      // 收益 = 推进 + 保险:回传的"安全价值"随压力上升(统一适用于任何回传,
-      // 门将只是最安全的出口——无盯防+通道清,成功率高,自然被选中)
-      const safety = isBackPass ? 0.7 * pressF : 0;
-      // 传球执行方式由局势涌现:同一脚传球,通道被挡→起高球(可越过拦截),空位→贴地(取效用高者)
-      const succL = 0.55 * (0.5 + 0.5 * (1 - chan));
-      const uG = (progN + safety) * succG * TUN.pass * counterB + (Math.random() - 0.5) * 0.05;
-      const uL = (progN + 0.2) * succL * TUN.pass * (0.5 + 0.5 * TUN.loft) * risk + (Math.random() - 0.5) * 0.05;
-      if (uG >= uL) { if (uG > passU) { passU = uG; passT = t; passLoft = false; } }
-      else { if (uL > passU) { passU = uL; passT = t; passLoft = true; } }
-    }
-
-    let trickU = 0;
-    if (opp) {
-      const oppDef = opp.ref ? opp.ref.attrs.defend : 0.9;
-      const succT = clamp(0.5 * p.attrs.dribble / (p.attrs.dribble + oppDef) + 0.15, 0, 0.85);
-      trickU = 0.8 * succT * TUN.trick * risk;
-    }
-    // 射门:效用已含门将覆盖(离位覆盖骤降),执行方式由 startShot 按局势自动选择
-    let best = 'dribble', bu = dribbleU;
-    if (shotU > bu) { bu = shotU; best = 'shot'; }
-    if (passU > bu) { bu = passU; best = 'pass'; }
-    if (trickU > bu) { bu = trickU; best = 'trick'; }
-    // 阈值触发器:空门且近距离且附近无人且门将不在位 → 无条件起脚
-    if (clear && gDist < 200 && (!nearPress || npd > 60) && gkFactor < 0.25 && TUN.shoot > 0.05) best = 'shot';
-
-    if (best === 'pass' && passT) { p.patience = 0; startPass(p, passT, passLoft, pressF); }
-    else if (best === 'shot') { p.patience = 0; startShot(p, pressF); }
-    else if (best === 'trick' && opp) { p.patience = 0; doTrick(p, opp); }
-    else {
-      // 带球执行方式由局势涌现:反击爆发+真正开阔+无压力 → 趟球大步推进;其余场合紧密护球
-      const knockOn = openSpace > 0.75 && pressF < 0.15 && transT[p.team] > 0;
-      if (knockOn && simT - p.lastKnock > 2.5) { p.lastKnock = simT; doBurst(p); return; }
-      // 假动作:被压迫时偶尔虚晃一枪(节奏变化),1s 内过人成功率提升
-      if (nearPress && Math.random() < 0.12 && simT - p.feintAt > 2) {
-        p.feintAt = simT;
-        p.vy += (Math.random() < 0.5 ? -1 : 1) * 140;  // 横向虚晃
-        p.action = '假动作';
-      } else p.action = '带球';
+    const cand = pickKick(p);
+    if (cand && (cand.type !== 'dribble' || cand.knockOn)) {
+      p.patience = 0;
+      startKick(p, cand);
+    } else {
+      // 没有值得"踢出去"的目标:紧密护球推进(球跟随身体,引擎层连续控制)
+      p.action = '带球';
       seekTarget(p, gc.x, gc.y, 430);
     }
     return;
