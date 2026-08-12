@@ -54,6 +54,7 @@
     transition: border-color .15s, background .15s;
   }
   .btns button:hover { border-color: #3fb950; background: #212b3a; }
+  .btns select { background: #1c2330; color: #e6edf3; border: 1px solid #2d3748; border-radius: 6px; padding: 4px 8px; font-size: 12.5px; cursor: pointer; }
   .btns label { font-size: 12.5px; color: #9aa4b2; display: flex; align-items: center; gap: 5px; cursor: pointer; }
   .btns input { accent-color: #3fb950; }
   #cv { display: block; background: #11161d; border: 1px solid #2d3748; border-top: none; width: 100%; }
@@ -163,7 +164,13 @@
     </div>
     <div class="btns">
       <button id="btnPause">暂停</button>
-      <button id="btnSpeed">速度 ×1</button>
+      <select id="selSpeed" title="比赛速度">
+        <option value="0.25">慢速 ×0.25</option>
+        <option value="0.5">慢速 ×0.5</option>
+        <option value="1" selected>×1</option>
+        <option value="2">×2</option>
+        <option value="4">×4</option>
+      </select>
       <label><input type="checkbox" id="ckArrows">决策力箭头</label>
       <label><input type="checkbox" id="ckLabels" checked>动作标签</label>
       <label><input type="checkbox" id="ckTlm">遥测日志</label>
@@ -1785,9 +1792,8 @@ document.getElementById('btnPause').addEventListener('click', function () {
   paused = !paused;
   this.textContent = paused ? '继续' : '暂停';
 });
-document.getElementById('btnSpeed').addEventListener('click', function () {
-  speed = speed === 1 ? 2 : speed === 2 ? 4 : 1;
-  this.textContent = '速度 ×' + speed;
+document.getElementById('selSpeed').addEventListener('change', function () {
+  speed = parseFloat(this.value);
 });
 document.getElementById('btnReset').addEventListener('click', kickoff);
 document.getElementById('btnAgain').addEventListener('click', kickoff);
