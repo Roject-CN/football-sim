@@ -949,18 +949,19 @@ function doTrick(p, opp) {
   const vopps = viewOpps(p);
   const s1 = sideClear(p, 1, vopps), s2 = sideClear(p, -1, vopps);
   const side = s1 && s2 ? (Math.random() < 0.5 ? -1 : 1) : s1 ? 1 : -1;
-  const win = Math.random() < 0.5 * p.attrs.dribble / (p.attrs.dribble + real.attrs.defend) + 0.15 + (simT - p.feintAt < 1 ? 0.12 : 0);  // 刚做完假动作 → 对手重心被骗,成功率提升
+  const win = Math.random() < 0.5 * p.attrs.dribble / (p.attrs.dribble + real.attrs.defend) + 0.18 + (simT - p.feintAt < 1 ? 0.12 : 0);  // 刚做完假动作 → 对手重心被骗,成功率提升
   if (win) {
     ball.ctrl = null;
     ball.lastTouch = p;
-    ball.x = clamp(real.x + dg * (PR + BR + 10), X0 + BR, X1 - BR);
-    ball.y = clamp(real.y + side * (PR + BR + 8), Y0 + BR, Y1 - BR);
-    const sp = 250 + 60 * p.attrs.speed;
+    ball.x = clamp(real.x + dg * (PR + BR + 14), X0 + BR, X1 - BR);
+    ball.y = clamp(real.y + side * (PR + BR + 10), Y0 + BR, Y1 - BR);
+    const sp = 280 + 60 * p.attrs.speed;
     const d = Math.max(1, dist2(p.x, p.y, ball.x, ball.y));
     ball.vx = (ball.x - p.x) / d * sp;
     ball.vy = (ball.y - p.y) / d * sp;
     p.sprint = true;
     real.cd = Math.max(real.cd, 0.55);
+    real.stagger = Math.max(real.stagger, 0.8 * TUN.stag);  // 过干净:防守者踉跄,追不上也封堵不了
     p.stats.trickOk++;
     p.label = '过人'; p.labelT = 0.7;
     real.label = '被过'; real.labelT = 0.7;
@@ -1152,8 +1153,9 @@ function step(dt) {
     }
   } else {
     const h = ball.ctrl;
-    ball.x = h.x + dirX(h) * (PR + BR + 3);
-    ball.y = h.y;
+    // 真实带球:球随朝向(移动方向)在前方,转向时球跟着摆动;停下时球停在自己身前
+    ball.x = clamp(h.x + Math.cos(h.facing) * (PR + BR + 3), X0 + BR, X1 - BR);
+    ball.y = clamp(h.y + Math.sin(h.facing) * (PR + BR + 3), Y0 + BR, Y1 - BR);
     ball.vx = h.vx; ball.vy = h.vy;
   }
 
