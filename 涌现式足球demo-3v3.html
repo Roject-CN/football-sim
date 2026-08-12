@@ -607,8 +607,12 @@ function supportPositioning(p) {
   const dg = dirX(p);
   const fast = transT[p.team] > 0;  // 反击爆发:更深的前插 + 冲刺
   const sd = fast ? TUN.sDepth * 1.35 : TUN.sDepth;
-  const xC = [holder.x + dg * -45 * sd, holder.x + dg * 40 * sd, holder.x + dg * 100 * sd, holder.x + dg * 155 * sd, holder.x + dg * 210 * sd];
-  const yC = [GOAL_Y - 200, GOAL_Y - 100, GOAL_Y, GOAL_Y + 100, GOAL_Y + 200];
+  // 网格随局势自适应:越靠近对方球门,最远列越深(防线身后/禁区前);
+  // 最远 = min(320px, 到对方球门剩距 ×0.85)——球在己方半场不会无脑插到底
+  const ahead = Math.max(0, (goalX(p) - holder.x) * dg);
+  const depthMax = Math.min(320, ahead * 0.85);
+  const xC = [holder.x + dg * -90 * sd, holder.x + dg * 30 * sd, holder.x + dg * 110 * sd, holder.x + dg * 200 * sd, holder.x + dg * depthMax * sd];
+  const yC = [GOAL_Y - 240, GOAL_Y - 120, GOAL_Y, GOAL_Y + 120, GOAL_Y + 240];
   const vopps = viewOpps(p);
   // 团队分工:离持球者最远的无球队员担任"创造者"——拉边/纵深牺牲跑,创造空间给别人用
   const offBall = matesOf(p).filter(m => m !== holder && !m.isGK);
@@ -619,7 +623,7 @@ function supportPositioning(p) {
   }
   const isCreator = creator === p && offBall.length >= 2;
   const commit = clamp(((p.x - ownGoalX(p)) * dg) / 800, 0, 1);  // 压上程度(丢球后被反击的暴露)
-  const Loss = 0.4 + 0.6 * commit;
+  const Loss = 0.15 + 0.35 * commit;
   let best = null, bs = -1e9;
   for (const cx0 of xC) for (const cy0 of yC) {
     const x = clamp(cx0, X0 + PR + 6, X1 - PR - 6);
@@ -646,7 +650,8 @@ function supportPositioning(p) {
       const depth = clamp(((x - ball.x) * dg + 150) / 350, 0, 1);
       s = 0.45 * stretchY + 0.35 * depth + creation * 0.4 - (1 - P) * Loss * 0.5;
     } else {
-      const Gain = (fast ? 1.5 : 1) * (TUN.wp * prog + TUN.wW * width + TUN.wo * openN) + creation * 0.3;
+      // 推进价值权重 ×2:身前开阔点是进攻资源,不该输给"缩身后的安全感"
+      const Gain = (fast ? 1.5 : 1) * (TUN.wp * prog * 2 + TUN.wW * width + TUN.wo * openN) + creation * 0.3;
       s = P * Gain - (1 - P) * Loss + TUN.wL * lane * 0.3;
     }
     if (s > bs) { bs = s; best = { x, y }; }
