@@ -172,6 +172,7 @@
         <option value="4">×4</option>
       </select>
       <label><input type="checkbox" id="ckArrows">决策力箭头</label>
+      <label><input type="checkbox" id="ckVision">视野窗</label>
       <label><input type="checkbox" id="ckLabels" checked>动作标签</label>
       <label><input type="checkbox" id="ckTlm">遥测日志</label>
       <button id="btnReset">重新开局</button>
@@ -1601,6 +1602,23 @@ function draw() {
 
   const showArrows = document.getElementById('ckArrows').checked;
   const showLabels = document.getElementById('ckLabels').checked;
+  const showVision = document.getElementById('ckVision').checked;
+
+  // 视野窗:每人一个"朝向 ±60°、半径 380px"的感知锥(红淡红/蓝淡蓝),直观看到信息不对称
+  if (showVision) {
+    const va = VISION_HALF * Math.PI / 180;
+    for (const p of allPlayers()) {
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.arc(p.x, p.y, VISION_R, p.facing - va, p.facing + va);
+      ctx.closePath();
+      ctx.fillStyle = p.team === 'A' ? 'rgba(248,81,73,.08)' : 'rgba(88,166,255,.08)';
+      ctx.fill();
+      ctx.strokeStyle = p.team === 'A' ? 'rgba(248,81,73,.4)' : 'rgba(88,166,255,.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
 
   for (const p of allPlayers()) {
     if (showArrows && (Math.abs(p.fx) + Math.abs(p.fy)) > 40) {
@@ -1643,6 +1661,22 @@ function draw() {
       ctx.fillText(txt, p.x + 1, p.y - PR - 9);
       ctx.fillStyle = '#e6edf3';
       ctx.fillText(txt, p.x, p.y - PR - 10);
+    }
+  }
+
+  // 视野窗:被谁看到的对象画同色空心圈(叠加圈数=同时被几人看到,信息不对称一目了然)
+  if (showVision) {
+    for (const p of allPlayers()) {
+      for (const q of allPlayers()) {
+        if (q === p) continue;
+        if (visibleTo(p, q)) {
+          ctx.beginPath();
+          ctx.arc(q.x, q.y, PR + 5, 0, Math.PI * 2);
+          ctx.strokeStyle = p.team === 'A' ? 'rgba(248,81,73,.55)' : 'rgba(88,166,255,.55)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      }
     }
   }
 
