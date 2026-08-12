@@ -289,7 +289,7 @@ function makePlayer(team, idx, anchor) {
     action: '', label: '', labelT: 0, tlab: '',
     facing: team === 'A' ? 0 : Math.PI,
     mem: null, view: null, viewAt: -1, patience: 0,
-    runAfter: null, feintAt: -10, isGK: false, gkDive: null, protected: 0,
+    runAfter: null, feintAt: -10, lastKnock: -10, isGK: false, gkDive: null, protected: 0,
     react: 0.09 + Math.random() * 0.08, decideAt: Math.random() * 0.1
   };
 }
@@ -981,12 +981,12 @@ function decide(p) {
       const counterB = transT[p.team] > 0 ? 1.4 : 1;  // 反击中直塞优先(略降,给带球冲击留空间)
       // 回传己方半场的球:精度要求更高(自家门口不许乱传)
       const backMul = isBackPass ? 0.65 : 1;
-      const u = progN * succG * TUN.pass * counterB * backMul + (Math.random() - 0.5) * 0.05;
-      if (u > passU) { passU = u; passT = t; passLoft = false; }
-      // 高空球:通道被挡时价值骤升,可越过拦截;倍率随 loft 倾向平滑缩放
+      // 传球执行方式由局势涌现:同一脚传球,通道被挡→起高球(可越过拦截),空位→贴地(取效用高者)
       const succL = 0.55 * (0.5 + 0.5 * (1 - chan));
+      const uG = progN * succG * TUN.pass * counterB * backMul + (Math.random() - 0.5) * 0.05;
       const uL = (progN + 0.2) * succL * TUN.pass * (0.5 + 0.5 * TUN.loft) * risk + (Math.random() - 0.5) * 0.05;
-      if (uL > passU) { passU = uL; passT = t; passLoft = true; }
+      if (uG >= uL) { if (uG > passU) { passU = uG; passT = t; passLoft = false; } }
+      else { if (uL > passU) { passU = uL; passT = t; passLoft = true; } }
     }
 
     let trickU = 0;
@@ -995,27 +995,21 @@ function decide(p) {
       const succT = clamp(0.5 * p.attrs.dribble / (p.attrs.dribble + oppDef) + 0.15, 0, 0.85);
       trickU = 0.8 * succT * TUN.trick * risk;
     }
-    // 暴趟:一脚把球趟远再追——前方开阔时甩开追兵/趟球过人,反击利器(趟大了会被断/出界)
-    let burstU = 0;
-    if (openSpace > 0.35) {
-      const chaseBonus = vopps.some(o => (o.x - p.x) * dg > 0 && dist2(o.x, o.y, p.x, p.y) < 150) ? 0.35 : 0;
-      burstU = openSpace * (0.35 + chaseBonus + (transT[p.team] > 0 ? 0.3 : 0)) * (1 - pressF * 0.6) * TUN.dribble * risk;
-    }
-
     // 射门:效用已含门将覆盖(离位覆盖骤降),执行方式由 startShot 按局势自动选择
     let best = 'dribble', bu = dribbleU;
     if (shotU > bu) { bu = shotU; best = 'shot'; }
     if (passU > bu) { bu = passU; best = 'pass'; }
     if (trickU > bu) { bu = trickU; best = 'trick'; }
-    if (burstU > bu) { bu = burstU; best = 'burst'; }
     // 阈值触发器:空门且近距离且附近无人且门将不在位 → 无条件起脚
     if (clear && gDist < 200 && (!nearPress || npd > 60) && gkFactor < 0.25 && TUN.shoot > 0.05) best = 'shot';
 
     if (best === 'pass' && passT) { p.patience = 0; startPass(p, passT, passLoft, pressF); }
     else if (best === 'shot') { p.patience = 0; startShot(p, pressF); }
     else if (best === 'trick' && opp) { p.patience = 0; doTrick(p, opp); }
-    else if (best === 'burst') { p.patience = 0; doBurst(p); }
     else {
+      // 带球执行方式由局势涌现:反击爆发+真正开阔+无压力 → 趟球大步推进;其余场合紧密护球
+      const knockOn = openSpace > 0.75 && pressF < 0.15 && transT[p.team] > 0;
+      if (knockOn && simT - p.lastKnock > 2.5) { p.lastKnock = simT; doBurst(p); return; }
       // 假动作:被压迫时偶尔虚晃一枪(节奏变化),1s 内过人成功率提升
       if (nearPress && Math.random() < 0.12 && simT - p.feintAt > 2) {
         p.feintAt = simT;
@@ -1160,10 +1154,10 @@ function fireShot(p) {
   log(`${nameOf(p)} ${a.loft ? '挑射!' : '射门!'}`, '');
 }
 
-// 暴趟:第一脚触球把球趟远再追(距离/速度按"到达时间"反推,趟大了会被断/出界)
+// 趟球(带球的大步推进执行方式):一脚把球趟出再追——距离/速度按"到达时间"反推,趟大了会被断/出界
 function doBurst(p) {
   const dg = dirX(p);
-  const dist = 150 + 90 * p.attrs.speed + Math.random() * 60;   // 趟出 150~300px
+  const dist = 110 + 70 * p.attrs.speed + Math.random() * 50;   // 趟出 110~230px
   const t = 0.55 + Math.random() * 0.2;                         // 0.55~0.75s 到达
   const v0 = dist / ((1 - Math.exp(-0.5 * t)) / 0.5);
   ball.ctrl = null;

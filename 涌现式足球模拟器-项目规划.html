@@ -48,6 +48,13 @@
   h1 { font-size: clamp(26px, 4vw, 40px); line-height: 1.25; letter-spacing: -.02em; }
   h1 .accent { color: var(--green-bright); }
   .subtitle { margin-top: 12px; color: var(--text-dim); max-width: 780px; font-size: 15px; }
+  .principle {
+    margin-top: 20px; padding: 16px 20px; border: 1px solid rgba(63,185,80,.5);
+    background: linear-gradient(90deg, rgba(63,185,80,.10), transparent);
+    border-radius: 12px; box-shadow: 0 0 24px rgba(63,185,80,.12);
+  }
+  .principle b { color: var(--green-bright); font-size: 14px; letter-spacing: .08em; }
+  .principle p { font-size: 13.5px; color: var(--text-dim); margin-top: 6px; }
   .meta-row { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 10px; }
   .pill { font-size: 12.5px; padding: 5px 12px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--text-dim); }
 
@@ -163,6 +170,12 @@
   <h1>涌现式足球模拟器 <span class="accent">· 项目规划</span></h1>
   <p class="subtitle">终极目标:<b style="color:var(--green-bright)">把人类真实踢球的感觉量化为数据,用数据驱动的方式模拟人类现实足球的场景</b>。
   真实比赛里球员的每一个选择——传/带/射/过、站哪里、何时逼抢、被侵犯后是否上头——都拆解为可计算的数学结构,让智能体"涌现"出真实、每场不同的战术行为。</p>
+
+  <div class="principle">
+    <b>核心设计原则 · 动作涌现化(最高原则)</b>
+    <p>动作不是写死的脚本清单——射门的吊射/低平/弧线、传球的地面/高空、带球的紧密/趟球、过人/假动作,<b>全部是局势量化后的自然结果</b>,不设"动作按钮"、不做"动作特判"。</p>
+    <p>设计方法:先量化局势(门将站位、传球通道、空间开阔度、压力、节奏),再让行为从局势中涌现;评估模型与执行模型共用同一套数学(如 gkCoverage 同时服务 射门评估/扑救判定/xG),保证"觉得能进"与"实际进"一致。</p>
+  </div>
   <div class="meta-row">
     <span class="pill">引擎: Godot 4 / 当前 HTML+JS 沙盒</span>
     <span class="pill">路线: 力场叠加 + 阈值触发器</span>
@@ -329,6 +342,7 @@
       <div class="adr"><span class="nm">ADR-6</span><p><b>调试是常态。</b>涌现系统会集体抽风(扎堆、转圈),压制而非消灭。</p></div>
       <div class="adr"><span class="nm">ADR-7</span><p><b>身体限制是真实感的根基。</b>踉跄/动量/蓄力都是"身体做不到"带来的自然决策。</p></div>
       <div class="adr"><span class="nm">ADR-8</span><p><b>防守需要"节奏停顿"。</b>拦截/抢断后必须有踉跄期,否则乒乓式反复拦截。</p></div>
+      <div class="adr"><span class="nm">ADR-9</span><p><b>动作涌现化(最高原则)。</b>不设离散"动作按钮"——射门方式(吊射/低平/弧线)、传球高度(地面/高空)、带球方式(紧密/趟球)全部由局势量化后自然涌现;评估与执行共用同一模型,杜绝动作特判。</p></div>
     </section>
 
     <!-- 6 难点 -->
