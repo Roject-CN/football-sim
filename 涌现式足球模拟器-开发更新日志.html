@@ -74,7 +74,29 @@
   </header>
 
   <div class="v" style="--vc:#3fb950">
-    <div class="vhead"><span class="vname">v2.6 · 守门员系统</span><span class="vtag">最新</span><span class="vdate">2026-08-12</span></div>
+    <div class="vhead"><span class="vname">v2.7 ~ v2.8 · 动作细节与死球机制 + 上线部署</span><span class="vtag">最新</span><span class="vdate">2026-08-12</span></div>
+    <div class="vquote"><b>目标:</b>带球/射门/发球的动作细节真实化,并把项目部署到公网。</div>
+    <div class="sec">实现</div>
+    <ul>
+      <li><b>暴趟(v2.7)</b>:第一脚把球趟远再追(150~300px,按到达时间反推初速),空间开阔/反击/甩追兵时使用,趟大了会被断/出界</li>
+      <li><b>贴脸射门瞬时出脚(v2.7.1)</b>:力量下限 300→140,门前 50px windup≈0.02s(1帧);蓄力标签时长随蓄力缩短</li>
+      <li><b>死球机制(v2.8)</b>:边线球有发球人(走到边线内侧掷,球停在场外);球门球由门将/最近队员走到球处开球——不再"球瞬移到人脚下"、不再"拿球被背后逼抢"</li>
+      <li><b>蓄力随感知(v2.8)</b>:压力↑ → 蓄力缩短 45~50% + 误差放大 2~2.5 倍(仓促出脚更糙);空间足 → 从容更准——失误是量化的</li>
+      <li><b>回传门将(v2.8)</b>:压力越大越有价值的安全出口(压力小时几乎不选);门将开球力度适中(落点中前场,队友可控)</li>
+      <li><b>解围增强(v2.8)</b>:己方禁区内被贴身直接大脚解围;被围困 2 人+耐心耗尽解围;解围高弧线飞远(3~6 次/场)</li>
+      <li><b>日志统一</b>:门将显示"红门/蓝门"而非编号</li>
+    </ul>
+    <div class="sec">部署上线</div>
+    <ul>
+      <li><b>线上地址</b>: <span style="color:#58a6ff">https://roject-cn.github.io/football-sim/</span>(入口页:试玩/规划/日志)</li>
+      <li><b>仓库</b>: https://github.com/Roject-CN/football-sim (Public)</li>
+      <li><b>推送流程</b>: <code>git push origin main</code> → GitHub Pages 自动构建,1~2 分钟生效</li>
+    </ul>
+    <div class="data">验证(3场均值):解围 3~6 次/场,回传门将 5~13 次/场,门将开大脚 6~15 次/场;均衡比分 2:3/3:2/1:2 正常波动。</div>
+  </div>
+
+  <div class="v" style="--vc:#3fb950">
+    <div class="vhead"><span class="vname">v2.6 · 守门员系统</span><span class="vtag">历史</span><span class="vdate">2026-08-12</span></div>
     <div class="vquote"><b>目标:</b>门加大 + 禁区 + 门将智能体(同一套 感知→决策→驱动,不是特判脚本)。</div>
     <div class="sec">实现</div>
     <ul>

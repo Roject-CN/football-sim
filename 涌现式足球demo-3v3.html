@@ -384,7 +384,7 @@ function updateTlm(dt) {
     cells[8].textContent = Math.hypot(p.vx, p.vy).toFixed(0);
     cells[9].textContent = p.stagger > 0 ? p.stagger.toFixed(2) : '';
     if (lab !== p.tlab) {
-      log(`[${simT.toFixed(1)}s] ${teamName[p.team]}${p.idx + 1} ${p.tlab || '—'}→${lab} @(${p.x.toFixed(0)},${p.y.toFixed(0)}) 力(${p.fx.toFixed(0)},${p.fy.toFixed(0)})`, 'tel');
+      log(`[${simT.toFixed(1)}s] ${nameOf(p)} ${p.tlab || '—'}→${lab} @(${p.x.toFixed(0)},${p.y.toFixed(0)}) 力(${p.fx.toFixed(0)},${p.fy.toFixed(0)})`, 'tel');
       p.tlab = lab;
     }
   }
@@ -797,8 +797,8 @@ function gkKick(p) {
   else { tx = clamp(p.x + dg * 500, X0 + 30, X1 - 30); ty = GOAL_Y + (Math.random() - 0.5) * 160; }
   const d = Math.max(1, dist2(p.x, p.y, tx, ty));
   ball.ctrl = null; ball.lastTouch = p;
-  ball.alt = 40; ball.altV = clamp(d * 0.9, 300, 420);
-  const sp = clamp(d * 2.2, 500, 780);
+  ball.alt = 40; ball.altV = clamp(d * 0.8, 260, 360);
+  const sp = clamp(d * 1.7, 350, 520);   // 开球力度适中:落点在中前场,队友可控
   ball.vx = (tx - p.x) / d * sp;
   ball.vy = (ty - p.y) / d * sp;
   p.cd = 0.6;
@@ -866,7 +866,10 @@ function decide(p) {
     // —— R6 破局计时器 + 11.7 解围 ——
     if (transT[p.team] > 0) p.patience = 0;
     else p.patience += 0.1;
-    const desperate = p.patience > 3.0;
+    const desperate = p.patience > 2.5;
+    // 解围触发:①被围困 2 人+ 且耐心耗尽(无出球线路) ②己方禁区内被贴身→直接大脚解围
+    const ownBox = dist2(p.x, p.y, ownGoalX(p), GOAL_Y) < 220;
+    if (ownBox && pressedN >= 1 && gDist > 280) { clearBall(p); return; }
     if (desperate && pressedN >= 2) {
       let anyChan = false;
       for (const t of matesOf(p)) {
@@ -916,7 +919,13 @@ function decide(p) {
 
     let passU = -1, passT = null, passLoft = false;
     for (const t of matesOf(p)) {
-      if (t === p || t.isGK) continue;  // 不回传门将(门将开大脚,接了也白接)
+      if (t === p) continue;
+      if (t.isGK) {
+        // 回传门将:压力越大越有价值(安全出口),压力小则几乎不选
+        const uB = (0.15 + 0.55 * pressF) * 0.9 * TUN.pass + (Math.random() - 0.5) * 0.05;
+        if (uB > passU) { passU = uB; passT = t; passLoft = false; }
+        continue;
+      }
       // 预测落点:按飞行时间领到接球者的跑动位置——传跑结合
       const dd = Math.max(1, dist2(p.x, p.y, t.x, t.y));
       const Tf = dd / clamp(dd * 2.0, 300, 540);
@@ -1064,7 +1073,7 @@ function firePass(p) {
   pendingPass = { p, t: a.t, at: simT };
   a.t.receive = { until: simT + 1.3 };
   p.runAfter = { until: simT + 1.5 };  // 二过一:传完球前插
-  log(`${teamName[p.team]}${p.idx + 1} ${a.loft ? '高空球' : '传球'} → ${teamName[a.t.team]}${a.t.idx + 1}`, '');
+  log(`${nameOf(p)} ${a.loft ? '高空球' : '传球'} → ${nameOf(a.t)}`, '');
 }
 
 function fireShot(p) {
@@ -1081,7 +1090,7 @@ function fireShot(p) {
   p.stats.shot++;
   if (Math.abs(a.ty - GOAL_Y) <= GOAL_H / 2) p.stats.shotOn++;
   if (p.team === 'A') xgA += a.xg; else xgB += a.xg;
-  log(`${teamName[p.team]}${p.idx + 1} 射门!`, '');
+  log(`${nameOf(p)} 射门!`, '');
 }
 
 // 暴趟:第一脚触球把球趟远再追(距离/速度按"到达时间"反推,趟大了会被断/出界)
@@ -1100,21 +1109,21 @@ function doBurst(p) {
   p.cd = 0.25;
   p.sprint = true;
   p.label = '暴趟'; p.labelT = 0.6;
-  log(`${teamName[p.team]}${p.idx + 1} 暴趟!`, '');
+  log(`${nameOf(p)} 暴趟!`, '');
 }
 
-// 11.7 解围:被包围且无路可走,生理性大脚解围
+// 11.7 解围:被包围且无路可走,生理性大脚解围(高弧线,飞出危险区)
 function clearBall(p) {
   ball.ctrl = null;
   ball.lastTouch = p;
-  ball.alt = 30; ball.altV = 300 + Math.random() * 100;
+  ball.alt = 50; ball.altV = 380 + Math.random() * 120;
   const dir = dirX(p);
-  ball.vx = dir * (420 + Math.random() * 200);
-  ball.vy = (Math.random() - 0.5) * 320;
+  ball.vx = dir * (520 + Math.random() * 260);
+  ball.vy = (Math.random() - 0.5) * 360;
   p.cd = 0.5;
   p.label = '解围'; p.labelT = 0.8;
   p.patience = 0;
-  log(`${teamName[p.team]}${p.idx + 1} 解围!`, '');
+  log(`${nameOf(p)} 解围!`, '');
 }
 
 // 高空球:空中争顶 → 头球(朝进攻方向顶,带噪声)
@@ -1141,7 +1150,7 @@ function headerCheck() {
   pendingClaim = { p: hit, team: hit.team, key: 'header' };
   hit.label = '头球'; hit.labelT = 0.6;
   hit.cd = Math.max(hit.cd, 0.25);
-  log(`${teamName[hit.team]}${hit.idx + 1} 头球!`, '');
+  log(`${nameOf(hit)} 头球!`, '');
 }
 
 function doShot(p) {
@@ -1155,7 +1164,7 @@ function doShot(p) {
   ball.vy = (ty - p.y) / d * sp;
   p.cd = 0.3;
   p.label = '射门'; p.labelT = 0.8;
-  log(`${teamName[p.team]}${p.idx + 1} 射门!`, '');
+  log(`${nameOf(p)} 射门!`, '');
 }
 
 function sideClear(p, side, opps) {
@@ -1187,14 +1196,14 @@ function doTrick(p, opp) {
     p.stats.trickOk++;
     p.label = '过人'; p.labelT = 0.7;
     real.label = '被过'; real.labelT = 0.7;
-    log(`${teamName[p.team]}${p.idx + 1} 过掉 ${teamName[real.team]}${real.idx + 1}!`, 'good');
+    log(`${nameOf(p)} 过掉 ${nameOf(real)}!`, 'good');
   } else {
     takeBall(real);
     p.stats.lost++;
     p.cd = 0.4;
     p.label = '被断'; p.labelT = 0.7;
     real.label = '抢断'; real.labelT = 0.7;
-    log(`${teamName[real.team]}${real.idx + 1} 抢断 ${teamName[p.team]}${p.idx + 1}`, 'bad');
+    log(`${nameOf(real)} 抢断 ${nameOf(p)}`, 'bad');
   }
 }
 
@@ -1247,14 +1256,14 @@ function step(dt) {
             p.stats.lost++;
             p.label = '被断'; p.labelT = 0.7;
             opp.label = '抢断'; opp.labelT = 0.7;
-            log(`${teamName[opp.team]}${opp.idx + 1} 身体对抗胜出,抢断 ${teamName[p.team]}${p.idx + 1}`, 'bad');
+            log(`${nameOf(opp)} 身体对抗胜出,抢断 ${nameOf(p)}`, 'bad');
           } else {
             opp.stagger = 0.35 * TUN.stag;
             opp.vx += dirX(opp) * 90;
             opp.vy += (Math.random() - 0.5) * 200;
             p.label = '扛住'; p.labelT = 0.7;
             opp.label = '被扛开'; opp.labelT = 0.7;
-            log(`${teamName[p.team]}${p.idx + 1} 扛住逼抢,护住球`, 'good');
+            log(`${nameOf(p)} 扛住逼抢,护住球`, 'good');
           }
         }
       }
@@ -1365,7 +1374,7 @@ function step(dt) {
         transT[hit.team] = 2.5;  // 拦截得手 → 反击
         hit.label = '拦截'; hit.labelT = 0.7;
         const kind = ball.lastTouch && ball.lastTouch.label === '射门' ? '封堵' : '拦截';
-        log(`${teamName[hit.team]}${hit.idx + 1} ${kind}!`, 'good');
+        log(`${nameOf(hit)} ${kind}!`, 'good');
       } else {
         takeBall(hit);
       }

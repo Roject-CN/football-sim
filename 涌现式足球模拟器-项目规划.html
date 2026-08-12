@@ -524,7 +524,45 @@
       </table>
     </section>
 
-    <footer>涌现式足球模拟器 · 项目规划 v1.0 · 终极目标:把人类真实踢球的感觉量化为数据</footer>  </main>
+    <!-- 13 部署与交接 -->
+    <section id="s13">
+      <h2><span class="no">13</span>部署与协作交接(新对话先读这里)</h2>
+      <div class="tag done">线上已部署</div>
+
+      <h3>13.1 线上地址</h3>
+      <table>
+        <tr><th>入口</th><th>地址</th></tr>
+        <tr><td>入口页(试玩/规划/日志)</td><td class="dim" style="font-family:monospace">https://roject-cn.github.io/football-sim/</td></tr>
+        <tr><td>仓库</td><td class="dim" style="font-family:monospace">https://github.com/Roject-CN/football-sim</td></tr>
+        <tr><td>直连 Demo</td><td class="dim" style="font-family:monospace">https://roject-cn.github.io/football-sim/涌现式足球demo-3v3.html</td></tr>
+      </table>
+
+      <h3>13.2 日常协作流程</h3>
+      <div class="stack">
+        <div class="layer" style="--lc:#3fb950"><div class="ln">改动代码</div><div class="ld">编辑 <span style="font-family:monospace">涌现式足球demo-3v3.html</span>(单一文件,无构建)</div></div>
+        <div class="layer" style="--lc:#58a6ff"><div class="ln">提交推送</div><div class="ld"><span style="font-family:monospace">git add -A && git commit -m "说明" && git push origin main</span> → GitHub Pages 自动构建部署,1~2 分钟生效</div></div>
+        <div class="layer" style="--lc:#d29922"><div class="ln">数值验证</div><div class="ld"><span style="font-family:monospace">node tools/eval.js --rounds 3</span> → data/runs/&lt;时间戳&gt;/report.html(每配置 3 场均值+每场明细+全量采样),旧轮数据自动清理</div></div>
+        <div class="layer" style="--lc:#3fb950"><div class="ln">文档同步</div><div class="ld">改完功能后更新本规划文档(已实现清单/路线图/验证)+ 更新日志(新版本条目),保持三件套一致</div></div>
+      </div>
+
+      <h3>13.3 环境备忘</h3>
+      <table>
+        <tr><th>项</th><th>说明</th></tr>
+        <tr><td>Git</td><td class="dim">本地仓库已初始化,origin = GitHub(football-sim)</td></tr>
+        <tr><td>GitHub CLI</td><td class="dim">已安装 <span style="font-family:monospace">C:\Program Files\GitHub CLI\gh.exe</span>,已登录账号 Roject-CN(新建终端窗口可用 <span style="font-family:monospace">gh</span> 命令)</td></tr>
+        <tr><td>自动化管线</td><td class="dim"><span style="font-family:monospace">node tools/eval.js [--rounds N] [--configs 文件.json]</span>,内置 6 套战术配置;报告为 HTML</td></tr>
+        <tr><td>教程文件(不入库)</td><td class="dim">C:\Users\Roject\Desktop\CUG\Teach\必修一\ 为教学资料,已被 .gitignore 排除</td></tr>
+        <tr><td>数据目录</td><td class="dim">data/runs/ 只保留最新一轮(管线自动清理),不入库</td></tr>
+      </table>
+
+      <h3>13.4 当前版本状态(v2.8)</h3>
+      <div class="card"><div class="v">3v3+门将(人数可配,门将不占名额)/ 感知层(视野锥+遮挡+触觉+记忆预测)/ 效用决策(R4 收益×成功率×风格×风险)/ 空间价值(R1 期望值+创造者拉边)/ 身体对抗+踉跄/ 高空球+头球/ 二过一+暴趟+假动作/ 节奏控制/ 死球机制(边线球发球人+球门球门将开)/ 蓄力随感知/ 回传门将/ 解围/ 赛后数据+热区图+遥测+导出 / 自动化管线。</div></div>
+
+      <h3>13.5 下一步候选(按路线图)</h3>
+      <div class="card"><div class="v">情绪层(愤怒值→冲突,已设计待实现)/ 疲劳与精力系统(蓄力失误联动)/ 越位与多阵型 / 教练 AI(自动换战术)/ 自动战斗快模型 / 本地 LLM 新闻。</div></div>
+    </section>
+
+    <footer>涌现式足球模拟器 · 项目规划 v2.8 · 终极目标:把人类真实踢球的感觉量化为数据</footer>  </main>
 </div>
 
 <script>
@@ -534,7 +572,7 @@
     's1': '1. 定位与终极目标', 's2': '2. 核心架构', 's3': '3. 已实现系统',
     's4': '4. 调参体系', 's5': '5. 关键设计决策', 's6': '6. 难点与风险',
     's7': '7. 知识积累路线', 's8': '8. 路线图', 's9': '9. 验证记录', 's10': '10. 下一步行动',
-    's11': '11. 设计中:感知+记忆+规则', 's12': '12. 自动化评估管线'
+    's11': '11. 设计中:感知+记忆+规则', 's12': '12. 自动化评估管线', 's13': '13. 部署与协作交接'
   };
   const links = {};
   Object.keys(map).forEach(function (id) {
