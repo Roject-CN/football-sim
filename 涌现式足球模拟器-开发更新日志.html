@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>涌现式足球模拟器 · 开发更新日志</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg-soft: #161b22; --card: #1c2330; --line: #2d3748;
+    --green: #3fb950; --green-bright: #56d364; --gold: #d29922; --red: #f85149; --blue: #58a6ff;
+    --text: #e6edf3; --text-dim: #9aa4b2; --text-faint: #6e7681; --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    line-height: 1.7;
+    background-image: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(63,185,80,.10), transparent);
+  }
+  a { color: var(--blue); text-decoration: none; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+  header { text-align: center; margin-bottom: 40px; }
+  .kickoff {
+    display: inline-block; font-size: 12px; letter-spacing: .15em; color: var(--green-bright);
+    border: 1px solid rgba(63,185,80,.4); background: rgba(63,185,80,.08);
+    padding: 4px 14px; border-radius: 999px; margin-bottom: 14px;
+  }
+  h1 { font-size: 32px; letter-spacing: -.02em; }
+  h1 .accent { color: var(--green-bright); }
+  .sub { margin-top: 10px; color: var(--text-dim); font-size: 14px; max-width: 640px; margin-left: auto; margin-right: auto; }
+  .links { margin-top: 16px; font-size: 13px; color: var(--text-faint); }
+  .links a { margin: 0 8px; }
+
+  .v {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px 22px; margin-bottom: 18px; position: relative; overflow: hidden;
+  }
+  .v::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--vc, var(--green)); }
+  .vhead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .vname { font-size: 17px; font-weight: 700; }
+  .vtag { font-size: 11px; color: var(--vc, var(--green-bright)); border: 1px solid; border-radius: 999px; padding: 1px 10px; }
+  .vdate { font-size: 12px; color: var(--text-faint); margin-left: auto; }
+  .vquote { font-size: 13px; color: var(--text-dim); margin-bottom: 12px; }
+  .vquote b { color: var(--gold); }
+  .v .sec { font-size: 12.5px; letter-spacing: .06em; color: var(--green-bright); margin: 12px 0 6px; }
+  .v ul { list-style: none; }
+  .v ul li { font-size: 13.5px; color: var(--text-dim); padding: 3px 0 3px 18px; position: relative; }
+  .v ul li::before { content: "▸"; position: absolute; left: 2px; color: var(--vc, var(--green)); }
+  .v ul li b { color: var(--text); }
+  .v table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; }
+  .v th, .v td { padding: 5px 10px; text-align: left; border: 1px solid var(--line); }
+  .v th { color: var(--green-bright); font-weight: 600; }
+  .v .fix { color: var(--red); }
+  .v .ok { color: var(--green-bright); }
+  .v .data { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-top: 10px; font-size: 12.5px; color: var(--text-dim); }
+
+  .plan { background: rgba(63,185,80,.05); border: 1px dashed rgba(63,185,80,.35); border-radius: var(--radius); padding: 18px 22px; margin-top: 26px; }
+  .plan h2 { font-size: 16px; color: var(--green-bright); margin-bottom: 10px; }
+  .plan ol { margin-left: 20px; }
+  .plan li { font-size: 13.5px; color: var(--text-dim); padding: 3px 0; }
+
+  footer { text-align: center; color: var(--text-faint); font-size: 12px; margin-top: 40px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kickoff">DEVELOPMENT LOG · v0.1 → v1.0</div>
+    <h1>开发更新日志 <span class="accent">· 涌现式足球模拟器</span></h1>
+    <p class="sub">记录从想法到可运行 demo 的每一步迭代:改了什么、为什么改、验证结果如何。
+    终极目标:<b>把人类真实踢球的感觉量化为数据,用数据驱动的方式模拟人类现实足球的场景。</b></p>
+    <div class="links"><a href="涌现式足球模拟器-项目规划.html">← 项目规划</a><a href="涌现式足球demo-3v3.html">可运行 Demo →</a></div>
+  </header>
+
+  <div class="v" style="--vc:#3fb950">
+    <div class="vhead"><span class="vname">v1.0 · 战术系统</span><span class="vtag">最新</span><span class="vdate">2026-08-12</span></div>
+    <div class="vquote"><b>目标:</b>不同打法肉眼可区分——把"战术"从参数名变成按钮。</div>
+    <div class="sec">新增</div>
+    <ul>
+      <li><b>战术预设 ×5</b>:均衡 / 传控 / 防守反击 / 长传反击 / 高位逼抢,一键切换(20 参数捆绑,滑条同步)</li>
+      <li><b>4 个新参数</b>:防线深度(0.15~0.6)、逼抢强度(0~2,≥1.3 两人夹抢)、支援距离(0.4~1.6)、高空球倾向(0~2)</li>
+      <li><b>反击爆发</b>:抢断/拦截/夺回球权瞬间,全队 2.5s 冲刺前插 + 直塞权重翻倍 + 推进价值 ×2.2(防反的灵魂)</li>
+      <li><b>打法建议键</b>:按比分 + 剩余时间给出战术建议并一键应用,附理由</li>
+    </ul>
+    <div class="sec">验证(各预设模拟 90s)</div>
+    <table>
+      <tr><th>预设</th><th>比分</th><th>射门</th><th>地面传球</th><th>高空球</th><th>头球</th><th>抢断</th><th>拦截</th></tr>
+      <tr><td>传控</td><td>2:1</td><td>3</td><td>112</td><td>13</td><td>13</td><td>27</td><td>10</td></tr>
+      <tr><td>防守反击</td><td>7:4</td><td>13</td><td>86</td><td>18</td><td>18</td><td>26</td><td>3</td></tr>
+      <tr><td>长传反击</td><td>4:1</td><td>4</td><td>60</td><td>33</td><td>32</td><td>8</td><td>10</td></tr>
+      <tr><td>高位逼抢</td><td>0:1</td><td>3</td><td>75</td><td>33</td><td>33</td><td>29</td><td>21</td></tr>
+    </table>
+    <div class="data">四种打法指纹差异显著:传控 = 地面球最多,防反 = 射门暴击,长传 = 空战,高位 = 抢断/拦截机器。</div>
+  </div>
+
+  <div class="v" style="--vc:#58a6ff">
+    <div class="vhead"><span class="vname">v0.9 · 精度修复</span><span class="vdate">2026-08-12</span></div>
+    <div class="vquote"><b>来源:</b>用户导出比赛日志,逐条定位问题。</div>
+    <div class="sec">修复</div>
+    <ul>
+      <li class="fix"><b>高空球贴脸被拦</b>:高空球初始高度 40,出脚瞬间越过贴身逼抢者</li>
+      <li class="fix"><b>传球改传预测落点</b>:目标 = 接球者位置 + 速度×飞行时间,传跑结合而非传静止点</li>
+      <li class="fix"><b>对抗天平</b>:抢断基础概率 0.22→0.30、逼抢失败踉跄 0.5→0.35s,打破"扛住逼抢"无限护球</li>
+      <li><b>日志分段导出</b>:按"比赛开始"自动分段,每段带本场统计</li>
+    </ul>
+    <div class="data">验证:传球成功率 81~87%(修复前 ~65%),高空球贴脸被拦 0 次,比分回归均衡(2:2 / 2:0 / 2:5)。</div>
+  </div>
+
+  <div class="v" style="--vc:#58a6ff">
+    <div class="vhead"><span class="vname">v0.8 · 热区图与数据面板</span><span class="vdate">2026-08-12</span></div>
+    <div class="sec">新增</div>
+    <ul>
+      <li><b>赛后球员数据表</b>:进球/助攻/射门(命中率)/传球(成功率)/过人/抢断/拦截/头球(成功率)/被断</li>
+      <li><b>活动热区图</b>:每 0.4s 采样站位(22×11 网格),赛后点击球员查看(蓝→红停留强度)</li>
+      <li>统计口径:传球成功 = 球最终被本队控制;拦截/头球成功 = 处理后球回到本队</li>
+    </ul>
+  </div>
+
+  <div class="v" style="--vc:#d29922">
+    <div class="vhead"><span class="vname">v0.7 · 蓄力与调参面板</span><span class="vdate">2026-08-12</span></div>
+    <div class="vquote"><b>来源:</b>"门前轻推不需要准备很久,却站着摆姿势半天"。</div>
+    <div class="sec">新增</div>
+    <ul>
+      <li><b>蓄力系统</b>:准备时间 ∝ 力度——门前轻推 ≈0.08s,远射/长传 ≈0.4s;蓄力期间站定且可被抢断</li>
+      <li><b>左侧调参面板</b>:决策倾向 ×4、空间价值 ×5、防守站位 ×3、物理节奏 ×3,实时生效</li>
+      <li>修复:效用倍率在 bu 初始化后乘导致"带球倾向调低不生效"的 bug</li>
+    </ul>
+  </div>
+
+  <div class="v" style="--vc:#d29922">
+    <div class="vhead"><span class="vname">v0.6 · 高空球与头球</span><span class="vdate">2026-08-12</span></div>
+    <div class="vquote"><b>来源:</b>"传球加入 Y 轴吧,加上头球和高空球,要不然空间太小了"——第三维空间。</div>
+    <div class="sec">新增</div>
+    <ul>
+      <li>球场加高(420→500px),纵向空间 368→440px,网格/车道/锚点同步放大</li>
+      <li>球高度属性 alt/altV:重力 + 空中低阻力,飞行更远</li>
+      <li>传球分地面/高空:地面通道被挡时高空球效用骤升(越过拦截者头顶)</li>
+      <li>头球:20~90 高度、40px 内争顶,攻方顶向球门、守方解围;0.35s 冷却</li>
+      <li>渲染:球影随高度缩小 + 球体抬升</li>
+    </ul>
+    <div class="sec">调试中修复的两个 bug</div>
+    <ul>
+      <li class="fix">air 判定与高度积分循环死锁(球永远升不起来)→ `alt &gt; 0 || altV &gt; 0` 即视为空中</li>
+      <li class="fix">头球悬停连顶(2500 次/场)→ 头球后球落到地面 + 冷却</li>
+    </ul>
+    <div class="data">验证:头球 14~20 次/场,比分 0:0 / 1:0 / 1:3。</div>
+  </div>
+
+  <div class="v" style="--vc:#3fb950">
+    <div class="vhead"><span class="vname">v0.5 · 空间价值定位</span><span class="vdate">2026-08-12</span></div>
+    <div class="vquote"><b>来源:</b>"队友刻意保持距离——站在这里不是因为我需要离队友远,而是因为这块空间有利于比赛"。</div>
+    <div class="sec">重构</div>
+    <ul>
+      <li>进攻支援:5×5 候选网格打分 = 开放度 + 传球通道 + 推进 + 宽度 + 车道,选"对比赛最有利"的点</li>
+      <li>防守回防:站线 + 个人车道 + <b>封堵持球者传球通道</b></li>
+      <li>队友斥力 140→55(46→32px):间距由"选了不同的好位置"涌现,而非被推开</li>
+      <li>接应跑位(冲刺迎球)+ 角色滞回 0.4s + 传球通道评分</li>
+    </ul>
+    <div class="data">验证:拦截率从"满天飞"降到个位数,传球成功率显著上升。</div>
+  </div>
+
+  <div class="v" style="--vc:#3fb950">
+    <div class="vhead"><span class="vname">v0.4 · 身体对抗与踉跄</span><span class="vdate">2026-08-12</span></div>
+    <div class="vquote"><b>来源:</b>"拦截完停在对手前面,两个人反复拦截,像打乒乓球"。</div>
+    <div class="sec">修复</div>
+    <ul>
+      <li>拦截反弹随机化:±40° 偏转 + 动能衰减到 12~22%,不再原路弹回</li>
+      <li><b>踉跄状态</b>:拦截者 0.5s 减速 45%、无法停球/拦截/抢断;抢断后胜者稳重心、败者落后半身位(0.6s)</li>
+      <li><b>身体对抗掷骰</b>:新增"身体"属性,逼抢按双方身体对比定胜率</li>
+      <li>一键导出日志(txt,UTF-8)</li>
+    </ul>
+  </div>
+
+  <div class="v" style="--vc:#58a6ff">
+    <div class="vhead"><span class="vname">v0.3 · 遥测系统</span><span class="vdate">2026-08-12</span></div>
+    <div class="sec">新增</div>
+    <ul>
+      <li>实时表格:时间/球员/动作/位置 X,Y/力 Fx,Fy/合力/速度/踉跄,0.2s 刷新</li>
+      <li>动作切换自动写入事件日志:<code>[16.3s] 红1 扛住→蓄力·传球 @(370,299) 力(-124,-12)</code></li>
+    </ul>
+  </div>
+
+  <div class="v" style="--vc:#58a6ff">
+    <div class="vhead"><span class="vname">v0.2 · 从 1D 升到 2D</span><span class="vdate">2026-08-12</span></div>
+    <div class="vquote"><b>来源:</b>"他们只会在中轴线上运动,不符合足球里面的拉开空间"。</div>
+    <div class="sec">升级</div>
+    <ul>
+      <li>全 2D 运动,阵型锚点(1-2 站位),红蓝错开渲染</li>
+      <li>目标力 + 斥力场(对手 92px / 队友 46px)自然散开</li>
+      <li>进攻支援 / 防守站线 / 自由球补位三类无球行为</li>
+      <li>过人变向:选择压力小的一侧斜向拨球;出界:边线反弹、底线球门球</li>
+    </ul>
+  </div>
+
+  <div class="v" style="--vc:#d29922">
+    <div class="vhead"><span class="vname">v0.1 · 最小沙盒</span><span class="vdate">2026-08-12</span></div>
+    <div class="vquote"><b>目标:</b>验证"力场叠加 → 涌现"是否可行。</div>
+    <div class="sec">实现</div>
+    <ul>
+      <li>1D 简化版(不引入 Y 轴):6 球员 + 球在一条跑道上</li>
+      <li>效用式决策(控球者 5 候选)+ 无球角色(逼抢/回防/支援/抢球/补位)</li>
+      <li>拦截/封堵由物理碰撞自然产生——<b>无一句特判代码</b></li>
+      <li>感知误差(视野属性)、决策噪声、属性随机化</li>
+    </ul>
+    <div class="data">结论:涌现式 AI 完全可行,拦截等行为是物理的天然产物。</div>
+  </div>
+
+  <div class="plan">
+    <h2>后续版本规划</h2>
+    <ol>
+      <li><b>v1.1 情绪层</b>:愤怒值 → 报复性犯规 → 冲突涌现(打架/围裁判/红牌/10 打 11)</li>
+      <li><b>v1.2 战术细化</b>:多阵型(3-2-1/2-3-1)、边路/中路倾向、越位规则</li>
+      <li><b>v1.3 教练 AI</b>:打法建议升级为自动临场换战术</li>
+      <li><b>v1.4 自动战斗</b>:泊松快模型,用慢模型蒸馏校准</li>
+      <li><b>v1.5 叙事层</b>:本地 LLM 新闻/发布会(Ollama + Qwen2.5)</li>
+      <li><b>v2.0</b>:5v5 → 11v11,换人/体能/心态,Godot 3D 化(决策层纯逻辑不动)</li>
+    </ol>
+  </div>
+
+  <footer>涌现式足球模拟器 · 开发更新日志 · 每一条修改都来自"看比赛 → 发现问题 → 量化修复"的循环</footer>
+</div>
+</body>
+</html>

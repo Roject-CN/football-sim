@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>涌现式足球模拟器 · 项目规划(v1.0)</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg-soft: #161b22; --card: #1c2330; --line: #2d3748;
+    --green: #3fb950; --green-bright: #56d364; --gold: #d29922; --red: #f85149; --blue: #58a6ff;
+    --text: #e6edf3; --text-dim: #9aa4b2; --text-faint: #6e7681; --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    line-height: 1.7;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(63,185,80,.10), transparent),
+      repeating-linear-gradient(90deg, transparent 0 9.99%, rgba(255,255,255,.014) 10% 10.01%);
+  }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: flex; max-width: 1280px; margin: 0 auto; }
+  main { flex: 1; min-width: 0; padding: 32px 40px 120px; }
+
+  aside {
+    width: 260px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    padding: 28px 16px; border-right: 1px solid var(--line); background: linear-gradient(180deg, var(--bg-soft), var(--bg));
+  }
+  .side-title { font-size: 13px; color: var(--text-faint); letter-spacing: .12em; margin: 18px 12px 8px; }
+  .side-title:first-child { margin-top: 0; }
+  aside nav a {
+    display: block; padding: 7px 12px; margin: 1px 0; border-radius: 8px;
+    color: var(--text-dim); font-size: 13.5px; border-left: 3px solid transparent;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  aside nav a:hover { background: rgba(255,255,255,.05); color: var(--text); text-decoration: none; }
+  aside nav a.active { background: rgba(63,185,80,.10); color: var(--green-bright); border-left-color: var(--green); }
+
+  header { padding: 40px 40px 32px; max-width: 1280px; margin: 0 auto; }
+  .kickoff {
+    display: inline-block; font-size: 12px; letter-spacing: .15em; color: var(--green-bright);
+    border: 1px solid rgba(63,185,80,.4); background: rgba(63,185,80,.08);
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 16px;
+  }
+  h1 { font-size: clamp(26px, 4vw, 40px); line-height: 1.25; letter-spacing: -.02em; }
+  h1 .accent { color: var(--green-bright); }
+  .subtitle { margin-top: 12px; color: var(--text-dim); max-width: 780px; font-size: 15px; }
+  .meta-row { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .pill { font-size: 12.5px; padding: 5px 12px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--text-dim); }
+
+  section { margin-top: 56px; scroll-margin-top: 24px; }
+  h2 { font-size: 22px; letter-spacing: -.01em; display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  h2 .no {
+    font-size: 13px; color: var(--green-bright); border: 1px solid rgba(63,185,80,.35);
+    background: rgba(63,185,80,.08); width: 30px; height: 30px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-weight: 600;
+  }
+  h3 { font-size: 16.5px; margin: 26px 0 10px; }
+  p, li { font-size: 14.5px; }
+  .dim { color: var(--text-dim); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 18px; transition: transform .15s, border-color .15s, box-shadow .15s;
+  }
+  .card:hover { transform: translateY(-2px); border-color: rgba(63,185,80,.4); box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+  .card .k { font-size: 13px; letter-spacing: .06em; color: var(--green-bright); margin-bottom: 6px; }
+  .card .v { font-size: 14px; color: var(--text-dim); }
+
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; vertical-align: 1px; margin-left: 6px; }
+  .tag.core { background: rgba(63,185,80,.15); color: var(--green-bright); border: 1px solid rgba(63,185,80,.3); }
+  .tag.warn { background: rgba(210,153,34,.15); color: var(--gold); border: 1px solid rgba(210,153,34,.3); }
+  .tag.skip { background: rgba(248,81,73,.12); color: var(--red); border: 1px solid rgba(248,81,73,.3); }
+  .tag.done { background: rgba(63,185,80,.18); color: var(--green-bright); }
+
+  .checklist { list-style: none; }
+  .checklist li {
+    padding: 9px 12px; border-radius: 8px; margin: 3px 0; display: flex; gap: 10px; align-items: flex-start;
+    background: var(--card); border: 1px solid transparent; transition: border-color .15s, opacity .2s;
+    cursor: pointer; user-select: none;
+  }
+  .checklist li:hover { border-color: var(--line); }
+  .checklist li.done { opacity: .55; }
+  .checklist li.done .txt { text-decoration: line-through; }
+  .checklist .box {
+    width: 17px; height: 17px; border: 2px solid var(--text-faint); border-radius: 5px;
+    flex-shrink: 0; margin-top: 3px; display: inline-flex; align-items: center; justify-content: center;
+    transition: all .15s; font-size: 11px; color: transparent;
+  }
+  .checklist li.done .box { background: var(--green); border-color: var(--green); color: #0d1117; }
+  .checklist .sub { display: block; font-size: 12.5px; color: var(--text-faint); margin-top: 2px; }
+
+  .stack { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+  .layer { border-radius: var(--radius); padding: 16px 20px; border: 1px solid var(--line); background: var(--card); position: relative; overflow: hidden; }
+  .layer::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--lc); }
+  .layer .ln { font-size: 13px; letter-spacing: .1em; color: var(--lc); font-weight: 600; }
+  .layer .ld { font-size: 13.5px; color: var(--text-dim); margin-top: 4px; }
+  .layer .eq { font-family: Consolas, monospace; font-size: 13px; color: var(--text); background: rgba(255,255,255,.05); padding: 2px 8px; border-radius: 6px; }
+
+  .timeline { margin-top: 18px; position: relative; padding-left: 26px; }
+  .timeline::before { content: ""; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: linear-gradient(180deg, var(--green), var(--blue), var(--gold)); border-radius: 2px; opacity: .5; }
+  .m { position: relative; padding: 14px 16px; margin-bottom: 14px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); transition: transform .15s, border-color .15s; }
+  .m:hover { transform: translateX(4px); border-color: rgba(63,185,80,.4); }
+  .m::before {
+    content: ""; position: absolute; left: -24px; top: 20px; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--bg); border: 3px solid var(--mc, var(--green));
+  }
+  .m .mh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .m .mname { font-weight: 600; font-size: 15px; }
+  .m .mgoal { font-size: 12.5px; color: var(--mc, var(--green-bright)); border: 1px solid; border-radius: 999px; padding: 1px 10px; }
+  .m .mdesc { font-size: 13.5px; color: var(--text-dim); margin-top: 6px; }
+
+  .adr { display: flex; gap: 14px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); margin: 10px 0; }
+  .adr .nm { flex-shrink: 0; font-family: monospace; font-size: 12px; color: var(--gold); padding-top: 3px; }
+  .adr p { font-size: 13.5px; color: var(--text-dim); }
+  .adr p b { color: var(--text); }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13.5px; background: var(--card); border-radius: var(--radius); overflow: hidden; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { color: var(--green-bright); font-weight: 600; letter-spacing: .04em; background: rgba(63,185,80,.06); }
+  tr:last-child td { border-bottom: none; }
+  td.dim { color: var(--text-dim); }
+
+  .risk { display: flex; gap: 10px; align-items: baseline; padding: 11px 14px; background: var(--card); border-left: 3px solid var(--gold); border-radius: 0 var(--radius) var(--radius) 0; margin: 8px 0; }
+  .risk p { font-size: 13.5px; }
+  .risk b { color: var(--gold); }
+
+  .progress-wrap { margin-top: 18px; }
+  .progress-bar { height: 8px; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--green), var(--green-bright)); border-radius: 999px; transition: width .4s ease; }
+  .progress-label { font-size: 12.5px; color: var(--text-faint); margin-top: 6px; }
+
+  .next-steps { counter-reset: step; }
+  .next-steps li { list-style: none; counter-increment: step; padding: 10px 0 10px 44px; position: relative; font-size: 14px; border-bottom: 1px dashed var(--line); }
+  .next-steps li::before {
+    content: counter(step); position: absolute; left: 0; top: 8px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(63,185,80,.12); border: 1px solid rgba(63,185,80,.4);
+    color: var(--green-bright); display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+  }
+  footer { text-align: center; color: var(--text-faint); font-size: 12px; padding: 40px 20px 60px; border-top: 1px solid var(--line); margin-top: 60px; }
+
+  @media (max-width: 900px) {
+    aside { display: none; }
+    main { padding: 20px; }
+    header { padding: 24px 20px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kickoff">PROJECT VISION · 涌现式 AI 足球模拟 v1.0</div>
+  <h1>涌现式足球模拟器 <span class="accent">· 项目规划</span></h1>
+  <p class="subtitle">终极目标:<b style="color:var(--green-bright)">把人类真实踢球的感觉量化为数据,用数据驱动的方式模拟人类现实足球的场景</b>。
+  真实比赛里球员的每一个选择——传/带/射/过、站哪里、何时逼抢、被侵犯后是否上头——都拆解为可计算的数学结构,让智能体"涌现"出真实、每场不同的战术行为。</p>
+  <div class="meta-row">
+    <span class="pill">引擎: Godot 4 / 当前 HTML+JS 沙盒</span>
+    <span class="pill">路线: 力场叠加 + 阈值触发器</span>
+    <span class="pill">版本: v1.0 可玩(3v3)</span>
+    <span class="pill">规模: 3v3 起步 → 11v11</span>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="side-title">导航</div>
+    <nav id="toc"></nav>
+  </aside>
+
+  <main>
+
+    <!-- 1 定位 -->
+    <section id="s1">
+      <h2><span class="no">1</span>项目定位与终极目标</h2>
+      <div class="grid">
+        <div class="card"><div class="k">终极目标</div><div class="v">把"人类真实踢球的感觉"量化成属性、效用权重、空间价值、身体对抗与第三维空间的数学结构,模拟现实足球场景</div></div>
+        <div class="card"><div class="k">不是</div><div class="v">FIFA/实况的操控型,也不是 FM 的"数值概率掷骰子"</div></div>
+        <div class="card"><div class="k">核心卖点</div><div class="v">涌现式智能体:调整战术(权重/阵型)后,球员行为"肉眼可见"地变化(因果感)</div></div>
+        <div class="card"><div class="k">技术路线</div><div class="v">控制论 / 力场叠加(感知 → 决策 → 驱动),混合少量阈值触发器;非 RL 端到端、非 LLM 决策</div></div>
+      </div>
+      <h3>量产化思路:感觉 → 数据</h3>
+      <table>
+        <tr><th>人类踢球的感觉</th><th>量化形式</th></tr>
+        <tr><td>这个队友能接住吗 / 该传他还是自己带</td><td>属性(决策属性) + 效用权重(取舍标准)</td></tr>
+        <tr><td>这块空当对我们有利,我该站过去</td><td>空间价值评分(开放度/通道/推进/宽度/车道)</td></tr>
+        <tr><td>抢他一下,撞一下,踉跄一下</td><td>身体对抗掷骰 + 踉跄状态(动量/失衡)</td></tr>
+        <tr><td>这球太高了,跳起来顶/等它落地</td><td>第三维空间(高度 alt / 重力 / 头球窗口)</td></tr>
+        <tr><td>被连续侵犯,火气上来了</td><td>情绪层(愤怒值 → 报复欲力场,规划中)</td></tr>
+      </table>
+    </section>
+
+    <!-- 2 架构 -->
+    <section id="s2">
+      <h2><span class="no">2</span>核心架构(感知 → 决策 → 驱动)</h2>
+      <div class="stack">
+        <div class="layer" style="--lc:#58a6ff">
+          <div class="ln">感知层 · 传感器</div>
+          <div class="ld">视野误差(离球越远越不准,按"视野"属性)、局部观测、队友传球后的"接应"感知。<b>禁止上帝视角</b>——球员信息不对称才真实。</div>
+        </div>
+        <div class="layer" style="--lc:#3fb950">
+          <div class="ln">决策层 · 主控</div>
+          <div class="ld">效用式决策(控球者:射门/传球·地面高空/带球/过人,取最大)+ 角色式站位(无球者:支援/逼抢/回防/抢球/补位)+ 蓄力 + 阈值触发器 + 反击爆发。<br>
+            站位评分:<span class="eq">分数 = 开放度 + 传球通道 + 推进价值 + 宽度 + 车道</span>(选"对比赛最有利"的点)</div>
+        </div>
+        <div class="layer" style="--lc:#d29922">
+          <div class="ln">驱动层 · 身体</div>
+          <div class="ld">目标力 + 斥力(对手为主,队友极弱)+ 惯性 + 摩擦;踉跄状态(减速 45%、无法停球/拦截/抢断)。
+          <b>身体限制迫使决策层"提前预判",自然产生跑位</b>。</div>
+        </div>
+      </div>
+      <p class="dim" style="margin-top:14px"><b>关键纪律:</b>决策层写成纯逻辑、与引擎无关(输入感知数据 → 输出目标点/力向量)。引擎只是"身体","大脑"独立,便于换引擎/测试。</p>
+    </section>
+
+    <!-- 3 已实现系统 -->
+    <section id="s3">
+      <h2><span class="no">3</span>已实现系统(可勾选跟踪)</h2>
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="pf"></div></div>
+        <div class="progress-label" id="pl">已勾选 0 / 0 项(点击勾选,进度自动保存)</div>
+      </div>
+
+      <h3>物理与空间<span class="tag done">已实现</span></h3>
+      <ul class="checklist" data-group="物理空间">
+        <li><span class="box">✓</span><span><span class="txt">2D 球场与球员</span><span class="sub">960×500,纵向 440px,红蓝各 3 人,无门将,圆盘碰撞</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">7 项属性</span><span class="sub">速度/盘带/传球/射门/视野/防守/身体 + 身体约束(最大速度/惯性阻尼)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">斥力场</span><span class="sub">对手 92px 强斥力(可调),队友斥力极弱——间距交给选位涌现</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">第三维空间(高空球)</span><span class="sub">球有高度 alt/altV:重力 + 空中低阻力,初始高度 40 越过贴身逼抢</span></span></li>
+      </ul>
+
+      <h3>决策系统<span class="tag done">已实现</span></h3>
+      <ul class="checklist" data-group="决策">
+        <li><span class="box">✓</span><span><span class="txt">效用决策(5 候选)</span><span class="sub">射门/传球(地面·高空)/带球/过人,属性 + 局势 + 噪声取最大</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">阈值触发器</span><span class="sub">空门且 200px 内 → 无条件起脚(肾上腺素式硬触发)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">蓄力系统</span><span class="sub">准备时间 ∝ 力度:门前轻推 ≈0.08s,远射/长传 ≈0.4s;蓄力期间站定可被抢断</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">无球角色 + 滞回</span><span class="sub">支援/逼抢/回防/抢球/补位,角色切换 0.4s 滞回防抖动</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">接应 + 预测落点</span><span class="sub">传球瞬间接球者冲刺迎球;传球目标 = 位置 + 速度×飞行时间(传跑结合)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">反击爆发</span><span class="sub">夺回球权瞬间全队 2.5s 冲刺前插 + 直塞权重翻倍 + 推进价值 ×2.2</span></span></li>
+      </ul>
+
+      <h3>空间价值定位<span class="tag done">已实现</span></h3>
+      <ul class="checklist" data-group="空间">
+        <li><span class="box">✓</span><span><span class="txt">进攻支援打分</span><span class="sub">5×5 候选网格:开放度/传球通道/推进/宽度/车道,选最有利的点</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">防守封堵通道</span><span class="sub">站"球与球门之间"的线 + 站在持球者的传球路线上</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">自由球补位</span><span class="sub">球与己方球门中点 + 车道/开放度</span></span></li>
+      </ul>
+
+      <h3>身体对抗与情绪<span class="tag done">部分</span></h3>
+      <ul class="checklist" data-group="对抗">
+        <li><span class="box">✓</span><span><span class="txt">身体对抗掷骰</span><span class="sub">逼抢按双方"身体"属性定胜率(基础 0.30),胜者夺球、败者踉跄</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">踉跄状态</span><span class="sub">减速 45%、无法停球/拦截/抢断(球从身边滑过)——消除乒乓拦截</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">头球系统</span><span class="sub">20~90 高度、40px 内争顶;攻方顶向球门、守方解围;0.35s 冷却</span></span></li>
+        <li><span class="box"></span><span><span class="txt">情绪层</span><span class="sub">愤怒值 → 报复欲力场 → 冲突涌现(打架/围裁判/红牌)——规划中</span></span></li>
+      </ul>
+
+      <h3>数据与调试<span class="tag done">已实现</span></h3>
+      <ul class="checklist" data-group="调试">
+        <li><span class="box">✓</span><span><span class="txt">遥测日志</span><span class="sub">实时表格(动作/位置/力/踉跄)+ 动作切换自动写日志</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">日志导出</span><span class="sub">按比赛自动分段,每段带本场统计(比分/射门/传球/拦截/头球)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">赛后数据面板</span><span class="sub">进球/助攻/射门命中/传球成功率/过人/抢断/拦截/头球/被断</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">活动热区图</span><span class="sub">0.4s 采样(22×11 网格),赛后点击球员查看(蓝→红停留强度)</span></span></li>
+      </ul>
+    </section>
+
+    <!-- 4 调参体系 -->
+    <section id="s4">
+      <h2><span class="no">4</span>调参体系(左侧面板,实时生效)</h2>
+      <h3>4.1 参数表(20 个)</h3>
+      <table>
+        <tr><th>分组</th><th>参数</th><th>范围</th><th>说明</th></tr>
+        <tr><td>决策倾向</td><td>传球 / 射门 / 过人 / 带球</td><td>×0~2</td><td class="dim">效用倍率,决定行为偏好</td></tr>
+        <tr><td>决策倾向</td><td>高空球 loft</td><td>×0~2</td><td class="dim">高空球效用加成</td></tr>
+        <tr><td>空间价值(进攻)</td><td>开放度 / 通道 / 推进 / 宽度 / 车道</td><td>0~0.6</td><td class="dim">站位评分权重</td></tr>
+        <tr><td>空间价值(进攻)</td><td>支援距离 sDepth</td><td>0.4~1.6</td><td class="dim">贴身短传 ↔ 拉开纵深</td></tr>
+        <tr><td>防守站位</td><td>封堵通道 / 开放度 / 车道偏好</td><td>0~0.6</td><td class="dim">回防站位权重</td></tr>
+        <tr><td>防守站位</td><td>防线深度 dLine</td><td>0.15~0.6</td><td class="dim">蹲坑 0.22 ↔ 高位 0.52</td></tr>
+        <tr><td>防守站位</td><td>逼抢强度 press</td><td>0~2</td><td class="dim">≥1.3 触发两人夹抢</td></tr>
+        <tr><td>物理/节奏</td><td>对手斥力 rep</td><td>0~600</td><td class="dim">空间物理感</td></tr>
+        <tr><td>物理/节奏</td><td>踉跄时长 stag</td><td>×0.2~2</td><td class="dim">身体失衡恢复</td></tr>
+        <tr><td>物理/节奏</td><td>蓄力时间 wind</td><td>×0~2</td><td class="dim">出球准备时间</td></tr>
+      </table>
+
+      <h3>4.2 战术预设(一键切换,滑条同步)</h3>
+      <table>
+        <tr><th>预设</th><th>参数指纹</th><th>模拟表现(90s)</th></tr>
+        <tr><td><b>均衡</b></td><td class="dim">默认值</td><td class="dim">各项均衡</td></tr>
+        <tr><td><b>传控</b></td><td class="dim">传球 1.6 / 通道 0.45 / 推进 0.10 / 高空 0.3 / 支援 0.6</td><td class="dim">地面传球 112(全场最高),高空最少</td></tr>
+        <tr><td><b>防守反击</b></td><td class="dim">防线 0.22 / 逼抢 0.4 / 推进 0.35</td><td class="dim">射门 13 次(转换效率爆炸)</td></tr>
+        <tr><td><b>长传反击</b></td><td class="dim">高空 2.0 / 支援 1.35 / 推进 0.38</td><td class="dim">高空 33 + 头球 32(空战)</td></tr>
+        <tr><td><b>高位逼抢</b></td><td class="dim">防线 0.52 / 逼抢 1.6 / 宽度 0.08</td><td class="dim">抢断 29 + 拦截 21(压迫)</td></tr>
+      </table>
+      <h3>4.3 打法建议键</h3>
+      <div class="card"><div class="v">按<b>比分 + 剩余时间</b>给出建议并一键应用:领先→防守反击;落后且剩 &lt;25s→长传反击;平局末段→高位逼抢;平局中段→传控。并显示理由。下一步升级为"教练 AI"(自动临场换战术)。</div></div>
+    </section>
+
+    <!-- 5 ADR -->
+    <section id="s5">
+      <h2><span class="no">5</span>关键设计决策(ADR 记录)</h2>
+      <div class="adr"><span class="nm">ADR-1</span><p><b>纯涌现不够。</b>力场为主 + 少量阈值触发器/规则混合,这是实际可行的平衡点。</p></div>
+      <div class="adr"><span class="nm">ADR-2</span><p><b>涌现 ≠ 没有神阵。</b>只是提高找漏洞门槛、缩短生命周期;连续系统同样可被反向工程。</p></div>
+      <div class="adr"><span class="nm">ADR-3</span><p><b>快模型是慢模型的压缩版。</b>若做自动战斗,必须用慢模型蒸馏校准结果分布,否则玩家不信任。</p></div>
+      <div class="adr"><span class="nm">ADR-4</span><p><b>调参纪律。</b>一次只动一个参数 + 可视化 + 记录行为变化(和调 PID 同一套方法论)。</p></div>
+      <div class="adr"><span class="nm">ADR-5</span><p><b>观测必须带误差/局部视野。</b>这是"真正对战感"的来源,也是防止 AI 作弊的关键。</p></div>
+      <div class="adr"><span class="nm">ADR-6</span><p><b>调试是常态。</b>涌现系统会集体抽风(扎堆、转圈),压制而非消灭。</p></div>
+      <div class="adr"><span class="nm">ADR-7</span><p><b>身体限制是真实感的根基。</b>踉跄/动量/蓄力都是"身体做不到"带来的自然决策。</p></div>
+      <div class="adr"><span class="nm">ADR-8</span><p><b>防守需要"节奏停顿"。</b>拦截/抢断后必须有踉跄期,否则乒乓式反复拦截。</p></div>
+    </section>
+
+    <!-- 6 难点 -->
+    <section id="s6">
+      <h2><span class="no">6</span>难点与风险</h2>
+      <div class="risk"><p><b>调参地狱:</b>多智能体耦合,权重微调全局变样 → 靠调参面板 + 遥测数据。</p></div>
+      <div class="risk"><p><b>混沌崩溃:</b>涌现行为偶尔失控 → 阈值触发器压制。</p></div>
+      <div class="risk"><p><b>因果感:</b>玩家调整战术后必须感知到效果 → 战术预设 + 建议键给出明确参照。</p></div>
+      <div class="risk"><p><b>调试困难:</b>涌现系统的 bug 是蝴蝶效应 → 可视化 + 最小复现 + 日志导出。</p></div>
+    </section>
+
+    <!-- 7 知识 -->
+    <section id="s7">
+      <h2><span class="no">7</span>知识积累路线</h2>
+      <table>
+        <tr><th>时机</th><th>内容</th><th>说明</th></tr>
+        <tr><td><b style="color:var(--green-bright)">现在就需要</b></td><td>GDScript/Python、向量运算、一阶运动学</td><td class="dim">高中水平数学足够;电赛控制背景(PID/卡尔曼)直接迁移"感知-反馈-调参"思维</td></tr>
+        <tr><td><b style="color:var(--blue)">边做边学</b></td><td>组件式架构、调参方法论</td><td class="dim">球员 = 对象,能力 = 组件;固定 80% 参数,一次只动一个</td></tr>
+        <tr><td><b style="color:var(--gold)">以后再说</b></td><td>强化学习、图形渲染 / 3D、本地 LLM</td><td class="dim">2D 沙盒跑通、手调乏力后再学;RL 可用于蒸馏调参;LLM 用于新闻/发布会</td></tr>
+      </table>
+    </section>
+
+    <!-- 8 路线图 -->
+    <section id="s8">
+      <h2><span class="no">8</span>路线图</h2>
+      <h3>已实现(v1.0)<span class="tag done">可玩</span></h3>
+      <table>
+        <tr><th>阶段</th><th>内容</th><th>状态</th></tr>
+        <tr><td>v0.1</td><td>1D 最小沙盒:效用决策 + 物理碰撞涌现拦截</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v0.2</td><td>2D 升级:阵型锚点 + 斥力场 + 过人变向</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v0.3</td><td>遥测日志 + 一键导出</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v0.4</td><td>身体对抗掷骰 + 踉跄(消除乒乓拦截)</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v0.5</td><td>空间价值定位 + 接应/预测落点/滞回</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v0.6</td><td>高空球/头球(第三维空间)+ 球场加宽</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v0.7</td><td>蓄力系统 + 赛后数据面板 + 调参面板</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v0.8</td><td>活动热区图</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v0.9</td><td>空门阈值 + 预测落点 + 高空球初始高度 + 对抗天平 + 日志分段</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v1.0</td><td>战术预设 ×5 + 打法建议 + 反击爆发 + 4 新参数</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+      </table>
+      <h3>下一步(按优先级)</h3>
+      <div class="timeline">
+        <div class="m" style="--mc:#3fb950"><div class="mh"><span class="mname">v1.1 · 情绪层</span><span class="mgoal">愤怒值 → 冲突涌现</span></div><div class="mdesc">报复性犯规、打架/围裁判/红牌、10 打 11</div></div>
+        <div class="m" style="--mc:#3fb950"><div class="mh"><span class="mname">v1.2 · 战术细化</span><span class="mgoal">多阵型 + 越位</span></div><div class="mdesc">3-2-1/2-3-1、边路/中路倾向、越位规则</div></div>
+        <div class="m" style="--mc:#58a6ff"><div class="mh"><span class="mname">v1.3 · 教练 AI</span><span class="mgoal">自动临场换战术</span></div><div class="mdesc">把"打法建议"升级为根据比分/时间自动调整预设</div></div>
+        <div class="m" style="--mc:#58a6ff"><div class="mh"><span class="mname">v1.4 · 自动战斗</span><span class="mgoal">泊松快模型</span></div><div class="mdesc">慢模型蒸馏校准,模拟多赛季不卡顿</div></div>
+        <div class="m" style="--mc:#d29922"><div class="mh"><span class="mname">v1.5 · 叙事层</span><span class="mgoal">本地 LLM 新闻/发布会</span></div><div class="mdesc">Ollama + Qwen2.5,比赛数据 → 动态新闻</div></div>
+        <div class="m" style="--mc:#d29922"><div class="mh"><span class="mname">v2.0 · 规模与 3D</span><span class="mgoal">5v5 → 11v11 → Godot 3D</span></div><div class="mdesc">换人/体能/心态;决策层纯逻辑不动,引擎只换壳</div></div>
+      </div>
+    </section>
+
+    <!-- 9 验证 -->
+    <section id="s9">
+      <h2><span class="no">9</span>验证记录</h2>
+      <div class="grid">
+        <div class="card"><div class="k">传球成功率</div><div class="v">81~87%(预测落点前 ~65%)</div></div>
+        <div class="card"><div class="k">高空球贴脸被拦</div><div class="v">0 次(初始高度修复后)</div></div>
+        <div class="card"><div class="k">战术指纹</div><div class="v">四种打法数据差异显著,肉眼可区分(见 4.2)</div></div>
+        <div class="card"><div class="k">稳定性</div><div class="v">120s 压力模拟无 NaN / 无卡死</div></div>
+      </div>
+    </section>
+
+    <!-- 10 下一步 -->
+    <section id="s10">
+      <h2><span class="no">10</span>下一步行动</h2>
+      <ol class="next-steps">
+        <li>用调参面板 + 战术预设跑多场比赛,记录各预设观感,确定默认手感</li>
+        <li>实现情绪层(愤怒值 → 冲突)作为 v1.1</li>
+        <li>把"打法建议"升级为可触发的教练 AI(自动临场换战术)</li>
+        <li>每完成一阶段,用回放 + 导出日志记录涌现行为作为调参依据</li>
+      </ol>
+    </section>
+
+    <!-- 11 设计中 -->
+    <section id="s11">
+      <h2><span class="no">11</span>设计中:感知层 + 上下文记忆 + 基本规则集</h2>
+      <div class="tag warn">讨论中 · 尚未实现</div>
+      <p class="dim" style="margin-top:8px">重构方向:让智能体从"反应式"进化为"预测式"。核心结构:感知快照(只依据"已知信息"决策)+ 上下文记忆(环形缓冲 + 一阶外推)+ 统一威胁/空间价值。</p>
+
+      <h3>11.1 感知层规格(先只做视野)</h3>
+      <table>
+        <tr><th>项</th><th>规格</th></tr>
+        <tr><td>视野锥</td><td class="dim">朝向 = 移动方向(静止时朝对方球门);张角 120°;半径 = 150 + 80×vision</td></tr>
+        <tr><td>球</td><td class="dim">始终可见(注意力焦点),但带距离相关高斯误差</td></tr>
+        <tr><td>遮挡</td><td class="dim">"我→目标"线段与任何球员圆相交 → 不可见;不可见期间记忆停更、1s 后清空</td></tr>
+        <tr><td>感知误差</td><td class="dim">高斯噪声,σ ∝ 距离 × (1 − vision),上限 45px(替代现在的均匀 ±80px)</td></tr>
+        <tr><td>采样</td><td class="dim">10Hz,与决策同频;两次采样间用缓存</td></tr>
+        <tr><td>声音(下期)</td><td class="dim">事件队列:队友喊话("我空了"/压迫)、球触地声——只给方向不给精确位置</td></tr>
+      </table>
+
+      <h3>11.2 上下文记忆(感知记忆 + 预测)</h3>
+      <table>
+        <tr><th>项</th><th>规格</th></tr>
+        <tr><td>存储</td><td class="dim">每球员自带环形缓冲 30 条(@10Hz ≈ 3s);每条 {t, x, y, vx, vy}(速度由最近两次观测差分估计)</td></tr>
+        <tr><td>预测</td><td class="dim">一阶外推:未来位置 = 最后观测 + 速度 × T,T = 0.35s(人类反应 + 出球时间)</td></tr>
+        <tr><td>不确定性</td><td class="dim">置信度 conf = exp(−记忆陈旧度/0.5);预测位置加高斯噪声,σ = 24 + 陈旧度×70——越久远越"模糊的一大片"</td></tr>
+        <tr><td>丢失规则</td><td class="dim">对象被遮挡 >1s → 记忆清空,预测返回 null(不能透视,看不见的人就是"消失了")</td></tr>
+        <tr><td>反作用于决策</td><td class="dim">防守通道封堵、传球通道评估、逼抢目标、支援跑位的"开放度",全部使用对手的<b>预测位置</b>而非当前位置</td></tr>
+      </table>
+
+      <h3>11.3 感知快照(决策层只依据"已知信息")</h3>
+      <div class="card"><div class="v">每次决策前构建 <b>view</b> 快照:球(实测 + 误差)| 每个其他球员:视野内 → 实测带误差并写入记忆;视野外 → 从记忆外推预测(带置信度)。所有决策函数从快照读位置,不再直接读全局坐标。物理碰撞/斥力仍用真实位置(身体层永远是真实的)。</div></div>
+
+      <h3>11.4 决策层基本规则集 R1~R6(讨论定稿)</h3>
+      <table>
+        <tr><th>#</th><th>规则</th><th>数学形式</th></tr>
+        <tr><td>R1</td><td>空间价值 = 期望值</td><td class="dim">V(x,y) = P(成功)×Gain − (1−P)×Loss(高风险高回报空间由期望值自动权衡)</td></tr>
+        <tr><td>R2</td><td>进攻 = 创造最大威胁</td><td class="dim">支援/跑位 = argmax(空间价值 + 空间创造加分:站两防守者之间 / 防线身后)</td></tr>
+        <tr><td>R3</td><td>防守 = 压制威胁</td><td class="dim">站位 = 覆盖"对手可达且 Gain 高"的点(队友协调惩罚),最近者仍逼抢持球者</td></tr>
+        <tr><td>R4</td><td>控球者效用</td><td class="dim">5 候选 = 收益×成功率×风格权重(量纲归一化到 0~1)</td></tr>
+        <tr><td>R5</td><td>预测优先</td><td class="dim">所有"对手位置"用记忆外推值,置信度衰减</td></tr>
+        <tr><td>R6</td><td>破局计时器</td><td class="dim">控球方连续 3s 无 P×Gain &gt; 阈值机会 → 冒险系数爬升(远射/单打/往身后起高球)</td></tr>
+      </table>
+
+      <h3>11.5 威胁度公式(用作 Gain/Loss 的后果评估,不是站位驱动力)</h3>
+      <div class="card"><div class="v">Threat(x,y) = 推进价值 exp(−距球门/320) × 空间价值 min(距防守者距离)/150 × 通道价值 × 球员能力(0.5+0.5×射门)(0.5+0.5×速度) × 动量(0.5+0.5×dot(速度,朝向球门))。<br>站位用空间价值(过程指标),威胁度只用于评估"打穿的收益"与"被反击的损失"——防止阵地战倒脚。</div></div>
+    </section>
+
+    <!-- 12 自动化管线 -->
+    <section id="s12">
+      <h2><span class="no">12</span>自动化评估迭代管线</h2>
+      <div class="tag done">已实现</div>
+      <p class="dim" style="margin-top:8px">数值不靠拍脑袋:自动跑对局 → 收集统计 → 生成报告 → 分析(LLM/人)→ 调参 → 重跑。每轮迭代结束自动清理旧数据,只保留最新一轮。</p>
+
+      <h3>12.1 使用方式</h3>
+      <table>
+        <tr><th>命令</th><th>说明</th></tr>
+        <tr><td class="dim" style="font-family:monospace">node tools/eval.js</td><td class="dim">内置 6 套配置(均衡+5 战术),每套 3 场</td></tr>
+        <tr><td class="dim" style="font-family:monospace">node tools/eval.js --rounds 5</td><td class="dim">每套 5 场(场数越多方差越可信)</td></tr>
+        <tr><td class="dim" style="font-family:monospace">node tools/eval.js --configs tools/configs/example.json</td><td class="dim">叠加自定义配置(JSON 只写要改的参数)</td></tr>
+      </table>
+
+      <h3>12.2 流程与产物</h3>
+      <div class="stack">
+        <div class="layer" style="--lc:#3fb950"><div class="ln">① 抽取</div><div class="ld">从 demo HTML 抽取游戏逻辑,无头运行——单一真源,不改 demo 文件</div></div>
+        <div class="layer" style="--lc:#58a6ff"><div class="ln">② 对局</div><div class="ld">每配置 N 场 90s 完整比赛,收集:比分/控球/射门/传球(地面·高空)/成功率/头球/拦截/抢断/过人,含每场明细</div></div>
+        <div class="layer" style="--lc:#d29922"><div class="ln">③ 报告</div><div class="ld">data/runs/&lt;时间戳&gt;/report.md —— 对比表(均值±标准差)+ 每场明细 + 5 个预设的观察问题</div></div>
+        <div class="layer" style="--lc:#3fb950"><div class="ln">④ 分析</div><div class="ld">LLM/人在对话中读报告,回答观察问题,定位失衡/抖动,给出下一轮参数建议</div></div>
+        <div class="layer" style="--lc:#58a6ff"><div class="ln">⑤ 迭代</div><div class="ld">改参数/改规则 → 重跑;完成后自动删除旧轮 data/runs 目录,只留最新</div></div>
+      </div>
+
+      <h3>12.3 当前首轮发现的信号(2026-08-12)</h3>
+      <table>
+        <tr><th>配置</th><th>指纹</th><th>信号</th></tr>
+        <tr><td>传控</td><td class="dim">地面传球 116 / 高空 10 / 抢断 35.5</td><td class="dim" style="color:var(--green-bright)">符合预期</td></tr>
+        <tr><td>高位逼抢</td><td class="dim">拦截 21(全场最高)</td><td class="dim" style="color:var(--green-bright)">符合预期</td></tr>
+        <tr><td>长传反击</td><td class="dim">进球 9±2,比分 7:0 / 7:4</td><td class="dim" style="color:var(--gold)">疑似失衡,待验证(是否机制问题:头球/落点无人盯防)</td></tr>
+      </table>
+    </section>
+
+    <footer>涌现式足球模拟器 · 项目规划 v1.0 · 终极目标:把人类真实踢球的感觉量化为数据</footer>  </main>
+</div>
+
+<script>
+(function () {
+  const toc = document.getElementById('toc');
+  const map = {
+    's1': '1. 定位与终极目标', 's2': '2. 核心架构', 's3': '3. 已实现系统',
+    's4': '4. 调参体系', 's5': '5. 关键设计决策', 's6': '6. 难点与风险',
+    's7': '7. 知识积累路线', 's8': '8. 路线图', 's9': '9. 验证记录', 's10': '10. 下一步行动',
+    's11': '11. 设计中:感知+记忆+规则', 's12': '12. 自动化评估管线'
+  };
+  const links = {};
+  Object.keys(map).forEach(function (id) {
+    const a = document.createElement('a');
+    a.href = '#' + id; a.textContent = map[id]; a.dataset.target = id;
+    toc.appendChild(a); links[id] = a;
+  });
+  const sections = Object.keys(map).map(function (id) { return document.getElementById(id); });
+  window.addEventListener('scroll', function () {
+    const y = window.scrollY + 120; let cur = null;
+    sections.forEach(function (s) { if (s.offsetTop <= y) cur = s.id; });
+    Object.keys(links).forEach(function (id) { links[id].classList.toggle('active', id === cur); });
+  }, { passive: true });
+
+  let total = 0, done = 0;
+  document.querySelectorAll('.checklist').forEach(function (g) {
+    const items = g.querySelectorAll('li');
+    const key = 'fsim2-' + g.dataset.group;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) {}
+    items.forEach(function (li, i) {
+      total++;
+      if (saved && saved[i]) li.classList.add('done');
+      if (li.classList.contains('done')) done++;
+      li.addEventListener('click', function () {
+        li.classList.toggle('done');
+        const arr = [];
+        items.forEach(function (x) { arr.push(x.classList.contains('done')); });
+        try { localStorage.setItem(key, JSON.stringify(arr)); } catch (e) {}
+        update();
+      });
+    });
+  });
+  function update() {
+    const pct = total ? Math.round(done / total * 100) : 0;
+    document.getElementById('pf').style.width = pct + '%';
+    document.getElementById('pl').textContent = '已勾选 ' + done + ' / ' + total + ' 项(进度 ' + pct + '%)';
+  }
+  update();
+})();
+</script>
+</body>
+</html>
