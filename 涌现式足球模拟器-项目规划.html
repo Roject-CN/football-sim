@@ -402,15 +402,37 @@
         <tr><td>声音(下期)</td><td class="dim">事件队列:队友喊话("我空了"/压迫)、球触地声——只给方向不给精确位置</td></tr>
       </table>
 
-      <h3>11.2 上下文记忆(感知记忆 + 预测)</h3>
+      <h3>11.2 上下文记忆(三层各存各的,记忆反作用于决策)</h3>
+      <p class="dim" style="margin-bottom:8px">记忆不只存感知——感知/决策/驱动三层的状态都入记忆,且都能反过来影响决策。</p>
+
+      <div class="tag core" style="margin-bottom:8px">感知记忆(核心,已设计)</div>
       <table>
         <tr><th>项</th><th>规格</th></tr>
         <tr><td>存储</td><td class="dim">每球员自带环形缓冲 30 条(@10Hz ≈ 3s);每条 {t, x, y, vx, vy}(速度由最近两次观测差分估计)</td></tr>
         <tr><td>预测</td><td class="dim">一阶外推:未来位置 = 最后观测 + 速度 × T,T = 0.35s(人类反应 + 出球时间)</td></tr>
         <tr><td>不确定性</td><td class="dim">置信度 conf = exp(−记忆陈旧度/0.5);预测位置加高斯噪声,σ = 24 + 陈旧度×70——越久远越"模糊的一大片"</td></tr>
-        <tr><td>丢失规则</td><td class="dim">对象被遮挡 >1s → 记忆清空,预测返回 null(不能透视,看不见的人就是"消失了")</td></tr>
-        <tr><td>反作用于决策</td><td class="dim">防守通道封堵、传球通道评估、逼抢目标、支援跑位的"开放度",全部使用对手的<b>预测位置</b>而非当前位置</td></tr>
+        <tr><td>丢失规则</td><td class="dim">对象被遮挡 &gt;1s → 记忆清空,预测返回 null(不能透视,看不见的人就是"消失了")</td></tr>
+        <tr><td>反作用</td><td class="dim">防守通道封堵、传球通道评估、逼抢目标、支援开放度,全部使用对手的<b>预测位置</b>(R5)</td></tr>
       </table>
+
+      <div class="tag core" style="margin-bottom:8px">决策记忆(设计定稿)</div>
+      <table>
+        <tr><th>项</th><th>规格</th><th>用途</th></tr>
+        <tr><td>我的决策滞回</td><td class="dim">role / roleAt(0.4s 内不换角色)</td><td class="dim">已实现,防站位抖动</td></tr>
+        <tr><td>我的动作记录</td><td class="dim">lastAction / lastActionAt</td><td class="dim">支持"刚被过 → 立刻回追"等连续性行为</td></tr>
+        <tr><td>对手习惯</td><td class="dim">每对手最近 3 次变向方向统计 trickDir[±1]</td><td class="dim">防守站位时:对手习惯向右 → 封堵该侧重心(通道封堵偏置)</td></tr>
+        <tr><td>传球目标冷却</td><td class="dim">不连续两次传同一队友</td><td class="dim">避免"一根筋传一人"被断</td></tr>
+      </table>
+
+      <div class="tag core" style="margin-bottom:8px">驱动记忆(身体状态,喂给情绪层)</div>
+      <table>
+        <tr><th>项</th><th>规格</th><th>用途</th></tr>
+        <tr><td>身体失衡</td><td class="dim">stagger / windup(已有字段)</td><td class="dim">驱动层状态记忆,已实现</td></tr>
+        <tr><td>疲劳(规划)</td><td class="dim">连续冲刺时间累计 → 速度衰减 + 抢断失误率上升</td><td class="dim">让"跑不死"不存在</td></tr>
+        <tr><td>被侵犯记录</td><td class="dim">最近 30s 内"被谁侵犯"次数(情绪记忆)</td><td class="dim">愤怒值累积来源之一:同一个人连犯三次 → 上头</td></tr>
+      </table>
+
+      <p class="dim" style="margin-top:8px"><b>三层反作用闭环</b>:感知记忆 → 预测(R5);决策记忆 → 滞回 + 习惯对抗;驱动记忆 → 情绪层(愤怒值)→ 冲突。核心三件套(感知/记忆/规则)至此定稿。</p>
 
       <h3>11.3 感知快照(决策层只依据"已知信息")</h3>
       <div class="card"><div class="v">每次决策前构建 <b>view</b> 快照:球(实测 + 误差)| 每个其他球员:视野内 → 实测带误差并写入记忆;视野外 → 从记忆外推预测(带置信度)。所有决策函数从快照读位置,不再直接读全局坐标。物理碰撞/斥力仍用真实位置(身体层永远是真实的)。</div></div>
