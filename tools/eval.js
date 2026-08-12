@@ -101,7 +101,7 @@ global.__g = { kickoff, step, scoreA: () => scoreA, scoreB: () => scoreB,
       const b = g.ball();
       samples.push({
         t: +g.simT().toFixed(1),
-        ball: [+b.x.toFixed(0), +b.y.toFixed(0), +b.alt.toFixed(0), b.ctrl ? b.ctrl.id : null],
+        ball: [+b.x.toFixed(0), +b.y.toFixed(0), +b.alt.toFixed(0), b.ctrl ? b.ctrl.team : null],
         players: [...g.playersA(), ...g.playersB()].map(p => [+p.x.toFixed(0), +p.y.toFixed(0), +p.fx.toFixed(0), +p.fy.toFixed(0), p.action || ''])
       });
     }
