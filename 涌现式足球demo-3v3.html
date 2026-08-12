@@ -955,35 +955,26 @@ function decide(p) {
     let passU = -1, passT = null, passLoft = false;
     for (const t of matesOf(p)) {
       if (t === p) continue;
-      if (t.isGK) {
-        // 回传门将:压力越大越有价值(安全出口),压力小则几乎不选
-        const uB = (0.15 + 0.55 * pressF) * 0.9 * TUN.pass + (Math.random() - 0.5) * 0.05;
-        if (uB > passU) { passU = uB; passT = t; passLoft = false; }
-        continue;
-      }
-      if (t.isGK) {
-        // 回传门将:压力越大越有价值(安全出口),压力小则几乎不选
-        const uB = (0.15 + 0.55 * pressF) * 0.9 * TUN.pass + (Math.random() - 0.5) * 0.05;
-        if (uB > passU) { passU = uB; passT = t; passLoft = false; }
-        continue;
-      }
+      // 门将与普通队友用同一套评估(ADR-9):门将通常无盯防+通道清→成功率高,
+      // 推进价值低→压力小时不选,压力大(前路被堵)时"回传更安全"自然胜出
       // 预测落点:按飞行时间领到接球者的跑动位置——传跑结合
       const dd = Math.max(1, dist2(p.x, p.y, t.x, t.y));
       const Tf = dd / clamp(dd * 2.0, 300, 540);
-      const ptx = clamp(t.x + t.vx * Tf, X0 + 24, X1 - 24);
+      const ptx = clamp(t.x + t.vx * Tf + dg * 12, X0 + 24, X1 - 24);
       const pty = clamp(t.y + t.vy * Tf, Y0 + 24, Y1 - 24);
-      const isBackPass = t.isGK ? false : ((t.x - p.x) * dg < 0);  // 回传(朝己方门方向)
+      const isBackPass = (t.x - p.x) * dg < 0;  // 回传(朝己方方向)
       const progN = clamp((((ptx - p.x) * dg) + 200) / 400, 0, 1.2);
       let open = true;
       for (const o of vopps) if (dist2(o.x, o.y, ptx, pty) < 55) open = false;
       const chan = passLineClear(p.x, p.y, ptx, pty, vopps) ? 1 : 0;
       const succG = (open ? 0.85 : 0.35) * (0.6 + 0.4 * chan);
       const counterB = transT[p.team] > 0 ? 1.4 : 1;  // 反击中直塞优先(略降,给带球冲击留空间)
-      // 回传己方半场的球:精度要求更高(自家门口不许乱传)
-      const backMul = isBackPass ? 0.65 : 1;
+      // 收益 = 推进 + 保险:回传的"安全价值"随压力上升(统一适用于任何回传,
+      // 门将只是最安全的出口——无盯防+通道清,成功率高,自然被选中)
+      const safety = isBackPass ? 0.7 * pressF : 0;
       // 传球执行方式由局势涌现:同一脚传球,通道被挡→起高球(可越过拦截),空位→贴地(取效用高者)
       const succL = 0.55 * (0.5 + 0.5 * (1 - chan));
-      const uG = progN * succG * TUN.pass * counterB * backMul + (Math.random() - 0.5) * 0.05;
+      const uG = (progN + safety) * succG * TUN.pass * counterB + (Math.random() - 0.5) * 0.05;
       const uL = (progN + 0.2) * succL * TUN.pass * (0.5 + 0.5 * TUN.loft) * risk + (Math.random() - 0.5) * 0.05;
       if (uG >= uL) { if (uG > passU) { passU = uG; passT = t; passLoft = false; } }
       else { if (uL > passU) { passU = uL; passT = t; passLoft = true; } }
