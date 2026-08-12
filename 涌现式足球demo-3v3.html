@@ -722,9 +722,15 @@ function decide(p) {
     const dribbleU = (0.15 + 0.45 * openSpace + p.attrs.speed * 0.06) * (1 - pressF * 0.6) * TUN.dribble * (transT[p.team] > 0 ? 1.25 : 1);
 
     let shotU = 0;
-    if (gDist < 380) {
+    if (clear) {
+      // 全图射程:只要有空位就能打门,距离只影响收益(不设禁区)
+      const benefit = clamp(1 - gDist / 1000, 0.05, 1);
+      const succ = gDist < 200 ? 0.9 : 0.6;
+      shotU = benefit * succ * TUN.shoot * risk;
+    } else if (gDist < 300) {
+      // 无空位:只有近距离才强行起脚(有被挡风险)
       const benefit = 1 - gDist / 460;
-      const succ = (clear && gDist < 200) ? 0.9 : (nearPress ? 0.3 : clear ? 0.6 : 0.4);
+      const succ = nearPress ? 0.25 : 0.4;
       shotU = benefit * succ * TUN.shoot * risk;
     }
 
