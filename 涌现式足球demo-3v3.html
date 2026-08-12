@@ -955,11 +955,14 @@ function decide(p) {
     return;
   }
 
-  // —— 接应:队友传球后迎球跑(冲刺),而不是原地等球 ——
+  // —— 接应:队友传球后迎球跑(追预测落点,而不是原地等球) ——
   if (p.receive && simT < p.receive.until) {
     if (ball.ctrl === p) p.receive = null;
     else if (ball.ctrl === null && ball.lastTouch && ball.lastTouch.team === p.team) {
-      seekTarget(p, pb.x, pb.y, 780);
+      // 预测落点:球速外推 0.35s(地面摩擦已含在 vx 里,近似直线)
+      const lx = clamp(pb.x + pb.vx * 0.35, X0 + PR + 4, X1 - PR - 4);
+      const ly = clamp(pb.y + pb.vy * 0.35, Y0 + PR + 4, Y1 - PR - 4);
+      seekTarget(p, lx, ly, 820);
       p.sprint = true;
       p.action = '接应';
       return;
@@ -1035,6 +1038,11 @@ function fieldDrive(p) {
   const wa = 1 - mx, wd = mx;
   const mix = (k) => wd * W_DEF[k] + wa * W_ATT[k];
 
+  // 主控层阶段(状态机):关键力按阶段硬开关——space/chan 在防守瞬间立即掐断,不随平滑残留
+  const phase = holder ? (holder.team === p.team ? 'att' : 'def') : 'loose';
+  const spaceOn = phase === 'att' ? 1 : (phase === 'loose' ? 0.5 : 0.08);
+  const chanOn = phase === 'att' ? 1 : 0;
+
   // 阵型锚点(随球平移)
   const ax = p.anchor.x + FT.homeShift * (ball.x - (X0 + X1) / 2);
   const ay = p.anchor.y + FT.homeShift * (ball.y - GOAL_Y) * 0.5;
@@ -1100,21 +1108,44 @@ function fieldDrive(p) {
       fx += (mx2 - p.x) / dm * s; fy += (my2 - p.y) / dm * s;
     }
   }
-  // 6. 空位力:方向采样密度场(采样距离随状态:反击最远,防守最短)
+  // 6. 空位力:方向采样密度场(采样距离随状态:反击最远,防守最短;防守阶段硬掐断)
   {
     const dist = fast ? 240 : (wd > 0.5 ? 110 : 200);
     const sv = fieldSpace(p, vopps, dist, FT.spaceAspect, wa);
-    const s = FT.spaceStr * (0.35 + 0.65 * wa) * (fast ? 1.4 : 1) * mix('space');
+    const s = FT.spaceStr * (0.35 + 0.65 * wa) * (fast ? 1.4 : 1) * mix('space') * spaceOn;
     fx += sv.x * s; fy += sv.y * s;
   }
-  // 7. 通道力(攻态):接应环带弹簧——只校正与持球者的前后距离(站持球者前方 ~115px 纵深),
-  //    横向留给空间力拉开(不锁 y,避免接应扎堆)
-  if (holder && holder.team === p.team) {
-    const cx = holder.x + dg * 115;
-    const d = Math.max(1, dist2(p.x, p.y, cx, p.y));
-    const err = d - 60;  // 理想接应纵深差
-    const s = FT.chanStr * clamp(Math.abs(err) / 140, 0, 1) * (err > 0 ? 1 : -1) * mix('chan');
-    fx += (cx - p.x) / d * s; fy += 0;
+  // 7. 通道力(攻态):只对离持球者最近的无球者生效(1 人短传接应),
+  //    其他无球者由空间力主导跑位(渗透/宽度/插身后)——传控结构:1接应+1渗透
+  if (holder && holder.team === p.team && chanOn > 0) {
+    let closest = 1e9;
+    for (const m of matesOf(p)) {
+      if (m === holder || m.isGK) continue;
+      const dd = dist2(m.x, m.y, holder.x, holder.y);
+      if (dd < closest) closest = dd;
+    }
+    const myD = dist2(p.x, p.y, holder.x, holder.y);
+    if (myD < closest + 8) {
+      const cx = holder.x + dg * 115;
+      const d = Math.max(1, dist2(p.x, p.y, cx, p.y));
+      const err = d - 60;  // 理想接应纵深差
+      const s = FT.chanStr * clamp(Math.abs(err) / 140, 0, 1) * (err > 0 ? 1 : -1) * mix('chan') * chanOn;
+      fx += (cx - p.x) / d * s; fy += 0;
+    }
+  }
+  // 8. 迎球力:己方传出的自由球朝自己飞来时,被预测落点吸引(接球调整移动)
+  if (!ball.ctrl && ball.lastTouch && ball.lastTouch.team === p.team && phase !== 'def') {
+    const d = Math.max(1, dist2(p.x, p.y, ball.x, ball.y));
+    const spd = Math.hypot(ball.vx, ball.vy);
+    if (spd > 120 && d < 280) {
+      const relV = (ball.vx * (ball.x - p.x) + ball.vy * (ball.y - p.y)) / d;
+      if (relV < -60) {  // 球在靠近自己
+        const tx = clamp(ball.x + ball.vx * 0.3, X0 + PR + 4, X1 - PR - 4);
+        const ty = clamp(ball.y + ball.vy * 0.3, Y0 + PR + 4, Y1 - PR - 4);
+        const s = 560 * clamp(1 - d / 280, 0.2, 1);
+        fx += (tx - p.x) / d * s; fy += (ty - p.y) / d * s;
+      }
+    }
   }
 
   const mag = Math.hypot(fx, fy);
