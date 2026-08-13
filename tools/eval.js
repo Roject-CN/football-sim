@@ -135,6 +135,7 @@ function collect(g) {
     goals: cnt('队进球'),
     shots: cnt('射门!'),
     groundPass: cnt('传球 →'),
+    through: cnt('直塞'),
     loft: cnt('高空球'),
     headers: cnt('头球!'),
     intc: cnt('拦截!') + cnt('封堵!'),
@@ -185,7 +186,7 @@ function buildReport(runDir, results) {
   for (const r of results) {
     const a = r.agg;
     cmpRows += t(td(`<b>${r.name}</b>`) + td(a.score.join(' / ')) + td(fmt(a.goals)) + td(fmt(a.shots))
-      + td(fmt(a.groundPass)) + td(fmt(a.loft)) + td(fmt(a.passPct)) + td(fmt(a.headers))
+      + td(fmt(a.groundPass)) + td(fmt(a.through)) + td(fmt(a.loft)) + td(fmt(a.passPct)) + td(fmt(a.headers))
       + td(fmt(a.intc)) + td(fmt(a.tack)) + td(fmt(a.trickWon)) + td(fmt(a.runIn)) + td(fmt(a.feint)) + td(fmt(a.stretch)) + td(fmt(a.save)) + td(fmt(a.gkKick)) + td(fmt(a.xgA) + ':' + fmt(a.xgB)) + td(fmt(a.possRed)));
   }
 
@@ -193,10 +194,10 @@ function buildReport(runDir, results) {
   for (const r of results) {
     let rows = '';
     r.matches.forEach((m, i) => {
-      rows += t(td(i + 1) + td(m.score) + td(m.goals) + td(m.shots) + td(m.pass) + td(m.passPct)
+      rows += t(td(i + 1) + td(m.score) + td(m.goals) + td(m.shots) + td(m.pass) + td(m.through) + td(m.passPct)
         + td(m.loft) + td(m.headers) + td(m.intc) + td(m.tack) + td(m.trickWon) + td(m.runIn) + td(m.feint) + td(m.stretch) + td(m.save) + td(m.gkKick) + td(m.xgA + ':' + m.xgB) + td(m.possRed));
     });
-    detail += `<h3>${r.name}</h3><table><thead>${t(th('场次') + th('比分') + th('进球') + th('射门') + th('传球') + th('成功率%') + th('高空') + th('头球') + th('拦截') + th('抢断') + th('过人') + th('前插') + th('假动作') + th('拉边') + th('拑救') + th('大脚') + th('xG') + th('控球红%'))}</thead><tbody>${rows}</tbody></table>`;
+    detail += `<h3>${r.name}</h3><table><thead>${t(th('场次') + th('比分') + th('进球') + th('射门') + th('传球') + th('直塞') + th('成功率%') + th('高空') + th('头球') + th('拦截') + th('抢断') + th('过人') + th('前插') + th('假动作') + th('拉边') + th('拑救') + th('大脚') + th('xG') + th('控球红%'))}</thead><tbody>${rows}</tbody></table>`;
   }
 
   return `<!DOCTYPE html>
@@ -240,7 +241,7 @@ function buildReport(runDir, results) {
   每场全量采样 JSON:球员位置/力/动作 + 球状态,0.5s 间隔(如 <span style="font-family:monospace">balanced-m1.json</span>)</div>
 
   <h2>对比表(均值 ± 标准差)</h2>
-  <table><thead>${t(th('配置') + th('比分') + th('进球') + th('射门') + th('地面传球') + th('高空球') + th('传球成功率%') + th('头球') + th('拦截') + th('抢断') + th('过人成功') + th('前插') + th('假动作') + th('拉边') + th('拑救') + th('大脚') + th('xG') + th('控球红%'))}</thead><tbody>${cmpRows}</tbody></table>
+  <table><thead>${t(th('配置') + th('比分') + th('进球') + th('射门') + th('地面传球') + th('直塞') + th('高空球') + th('传球成功率%') + th('头球') + th('拦截') + th('抢断') + th('过人成功') + th('前插') + th('假动作') + th('拉边') + th('拑救') + th('大脚') + th('xG') + th('控球红%'))}</thead><tbody>${cmpRows}</tbody></table>
 
   <h2>每场明细</h2>
   ${detail}

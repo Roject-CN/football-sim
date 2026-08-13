@@ -1352,6 +1352,43 @@ function pickKick(p) {
       bu = u;
       best = { type: 'pass', tx: ptx, ty: pty, sp: clamp(dd * (1.7 + h * 0.6), 300, 560), alt: h * 45, bend: 0, t, pressF, u };
     }
+
+    // —— 直塞候选:踢到队友攻击方向前方的空当(不是脚),让队友跑上去接 ——
+    // 同一套「踢向目标点」哲学:直塞只是把落点选在队友身前空间,不是离散动作。
+    // 关键门槛(都是连续量,自然涌现,不设硬开关):
+    //   1) 队友正在前插/前冲(runForward)——直塞需要一个跑位的接应者,静态队友宁可传脚;
+    //   2) 落点要真在推进(>40px)且基本平级或在前方;
+    //   3) 落点空间要空(openTh)且队友能比对手先到(reachOk,更严);
+    //   4) 完成率显著低于传脚(踢进空当更难完成),只有「传脚被盯死」或「跑位者前方大空当」时才胜出。
+    const ahead = (t.x - p.x) * dg > 0;
+    const runForward = (t.vx * dg > 0) || (t.runAfter && simT < t.runAfter.until);
+    if (!t.isGK && (t.x - p.x) * dg > -30 && (ahead || runForward)) {
+      const room = Math.max(40, (goalX(t) - t.x) * dg);
+      const lead = clamp(room * 0.35, 60, 200);
+      const thx = clamp(t.x + dg * lead, X0 + 24, X1 - 24);
+      const thy = clamp(t.y + (GOAL_Y - t.y) * 0.12, Y0 + 24, Y1 - 24);
+      if ((thx - p.x) * dg > 40) {
+        const tSpd = 235 * t.attrs.speed * 1.15;
+        const tReach = dist2(t.x, t.y, thx, thy) / tSpd;
+        let oReach = 1e9;
+        for (const o of vopps) oReach = Math.min(oReach, dist2(o.x, o.y, thx, thy) / 260);
+        const reachOk = clamp(1 - (tReach - oReach) * 2.5, 0, 1);
+        // 落点空当密度(连续):对手离落点越近惩罚越重,取代「70px 内有无对手」的硬二值
+        let dens = 0;
+        for (const o of vopps) dens = Math.max(dens, 1 - dist2(o.x, o.y, thx, thy) / 110);
+        dens = clamp(dens, 0, 1);
+        const chanTh = passLineClear(p.x, p.y, thx, thy, vopps) ? 1 : 0;
+        const hTh = 1 - chanTh;
+        const succTh = 0.5 * reachOk * (1 - 0.55 * dens) * (chanTh ? 0.9 : 0.45);
+        const progTh = clamp(((thx - p.x) * dg + 200) / 400, 0, 1.2);
+        const uTh = (progTh + safety + progBias) * succTh * TUN.pass * (1 + hTh * 0.6 * TUN.loft) * counterB * risk + (Math.random() - 0.5) * 0.05;
+        if (uTh > bu) {
+          bu = uTh;
+          const dTh = Math.max(1, dist2(p.x, p.y, thx, thy));
+          best = { type: 'pass', tx: thx, ty: thy, sp: clamp(dTh * (1.7 + hTh * 0.6), 300, 560), alt: hTh * 45, bend: 0, t, pressF, u: uTh, through: true };
+        }
+      }
+    }
   }
 
   // —— 踢向球门(射门):落点/方式由门将站位推出(远角/出击挑射/空门角),门将覆盖决定成功率 ——
@@ -1489,8 +1526,9 @@ function fireKick(p) {
     pendingPass = { p, t: a.t, at: simT };
     a.t.receive = { until: simT + 2.0 };
     p.runAfter = { until: simT + 1.5 };
-    p.label = a.alt > 15 ? '高空球' : '传球'; p.labelT = 0.7;
-    log(`${nameOf(p)} ${a.alt > 15 ? '高空球' : '传球'} → ${nameOf(a.t)}`, '');
+    const passLabel = a.through ? '直塞' : (a.alt > 15 ? '高空球' : '传球');
+    p.label = passLabel; p.labelT = 0.7;
+    log(`${nameOf(p)} ${passLabel} → ${nameOf(a.t)}`, '');
   } else if (a.type === 'shot') {
     p.stats.shot++;
     if (Math.abs(ty - GOAL_Y) <= GOAL_H / 2) p.stats.shotOn++;
@@ -1546,13 +1584,21 @@ function oneTouchKick(p) {
     if (gk) aimY = GOAL_Y + (gk.y < GOAL_Y ? 1 : -1) * GOAL_H * 0.32;
     p.windAct = { ...a, ty: aimY + Math.sin(ang) * err * 0.6 };
   } else {
-    // 传球:落点用目标最新位置重瞄(只锁决策,不锁旧坐标)
+    // 传球:落点用目标最新位置重瞄(只锁决策,不锁旧坐标);直塞则重算「身前空当」而不是脚
     const t = a.t;
-    const dd = Math.max(1, dist2(p.x, p.y, t.x, t.y));
-    const Tf = dd / clamp(dd * 2.0, 300, 540);
-    const tx = clamp(t.x + t.vx * Tf + dirX(p) * 12 + Math.cos(ang) * err, X0 + 24, X1 - 24);
-    const ty = clamp(t.y + t.vy * Tf + Math.sin(ang) * err, Y0 + 24, Y1 - 24);
-    p.windAct = { ...a, tx, ty };
+    if (a.through) {
+      const room = Math.max(40, (goalX(t) - t.x) * dirX(t));
+      const lead = clamp(room * 0.35, 60, 200);
+      const tx = clamp(t.x + dirX(t) * lead + Math.cos(ang) * err, X0 + 24, X1 - 24);
+      const ty = clamp(t.y + (GOAL_Y - t.y) * 0.12 + Math.sin(ang) * err, Y0 + 24, Y1 - 24);
+      p.windAct = { ...a, tx, ty };
+    } else {
+      const dd = Math.max(1, dist2(p.x, p.y, t.x, t.y));
+      const Tf = dd / clamp(dd * 2.0, 300, 540);
+      const tx = clamp(t.x + t.vx * Tf + dirX(p) * 12 + Math.cos(ang) * err, X0 + 24, X1 - 24);
+      const ty = clamp(t.y + t.vy * Tf + Math.sin(ang) * err, Y0 + 24, Y1 - 24);
+      p.windAct = { ...a, tx, ty };
+    }
   }
   p.preCand = null;
   p.receive = null;
