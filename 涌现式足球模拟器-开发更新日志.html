@@ -66,7 +66,7 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="kickoff">DEVELOPMENT LOG · v0.1 → v4.11</div>
+    <div class="kickoff">DEVELOPMENT LOG · v0.1 → v4.12</div>
     <h1>开发更新日志 <span class="accent">· 涌现式足球模拟器</span></h1>
     <p class="sub">记录从想法到可运行 demo 的每一步迭代:改了什么、为什么改、验证结果如何。
     终极目标:<b>把人类真实踢球的感觉量化为数据,用数据驱动的方式模拟人类现实足球的场景。</b></p>
@@ -150,7 +150,7 @@
   </div>
 
   <div class="v" style="--vc:#56d364">
-    <div class="vhead"><span class="vname">v4.11 · 情景沙盒独立模式 + 导出此刻 + 门将抱球保护</span><span class="vtag">最新</span><span class="vdate">2026-08-13</span></div>
+    <div class="vhead"><span class="vname">v4.11 · 情景沙盒独立模式 + 导出此刻 + 门将抱球保护</span><span class="vtag">上一版</span><span class="vdate">2026-08-13</span></div>
     <div class="vquote"><b>目标:</b>把沙盒从"暂停比赛的小工具"升级成独立测试台,并能把当前瞬间一键存成 JSON 供复盘;同时给门将"用手抱球"的 2s 无敌保护,避免接球后立刻被抢丢球。</div>
     <div class="sec">情景沙盒独立模式</div>
     <ul>
@@ -169,6 +169,38 @@
       <li>哲学:门将本就是 ADR-10 允许的合理状态机例外,这条只补"持球保护"一个连续时间窗 + "退开"一段连续斥力,不引入新动作类型</li>
     </ul>
     <div class="data">验证:eval 10 场(5 配置 × 2)无崩溃、比分正常;探针:门将抱球时对手初始 60px → 1s 后 257px(退开)、门将仍持球未被抢;2s 后开大脚。</div>
+  </div>
+
+  <div class="v" style="--vc:#3fb950">
+    <div class="vhead"><span class="vname">v4.12 · 感知层信息接受 + 决策层上下文记忆(呼喊系统)+ 门将大脚修复</span><span class="vtag">最新</span><span class="vdate">2026-08-13</span></div>
+    <div class="vquote"><b>目标:</b>在「球权认领(我来!)」之上泛化出一层<b>呼喊/意图广播</b>——门将说"我要开大脚了、你提前跑",跑位者说"我在跑位!传提前球",持球队员据此调整决策;同时修掉门将大脚"开太大/接球队友先往回再追"的根因。</div>
+    <div class="sec">呼喊/意图广播(权责分配的泛化)</div>
+    <ul>
+      <li>球员新增 <code>shout</code> 字段 + <code>hearShouts(p, R)</code>:队友在半径 <b>SHOUT_R=480</b>(比视野 380 略大——声音绕得过、不需直视)内"听得到"彼此讲话,越近越清楚(<code>conf = 1 - d/R</code>)。广播是<b>共享上下文,只影响决策,不覆盖力场</b>(同 ADR-10 哲学)</li>
+      <li>与既有「球权认领」同一层:认领解决"谁去接这颗自由球"的离散共识;呼喊解决"我接下来要干嘛/我要你干嘛"的意图同步——两者都是 ADR-10 允许的"真正离散职责"例外,不碰"怎么移动"</li>
+    </ul>
+    <div class="sec">门将大脚修复(点名接应,不再开太大)</div>
+    <ul>
+      <li><b>根因</b>:旧 <code>gkKick</code> 只把落点选在队友当前站位 + 0.6s 外推,却没给接球者设 <code>receive</code>;接球者先被 0.35s 外推的瞬时位置拉<b>往回</b>跑,再回头追落点,往往追不上 → 表现为"开太大"</li>
+      <li><b>修复</b>:大脚目标选在队友<b>攻击方向前方</b>(lead 120~260 随其前冲速度加码),并<b>直接点名</b>该队友 <code>best.receive = { point: 真实落点 }</code>——可靠信道,不依赖队友视野看得到门将;决策层接应分支改用 <code>receive.point</code> 一步到位迎球,而不是 0.35s 外推</li>
+      <li>同时广播 <code>shout = { type:'gkKick', 落点 }</code>,让附近队友"听到"后提前压上抢二点(预留钩子,可后续接战术)</li>
+    </ul>
+    <div class="sec">跑位呼喊(我在跑位!传提前球)</div>
+    <ul>
+      <li>攻态无球者(<code>wa&gt;0.5</code>)的跑位目标明显越过球位(前方 70px+)时,持续广播 <code>shout = { type:'run', 落点 }</code>——"我在往 X 跑,给我传提前球"</li>
+      <li>持球者 <code>pickKick</code> 的直塞候选新增 <b>runShout</b> 通道:听得到的跑位呼喊(半径内)会让直塞<b>直接往队友喊的落点送</b>(不再猜"他身前多少"),并给完成率 +15% 加成(他主动跑向那里,不是原地等人);背对/在身后的跑位者也能被"听到"</li>
+      <li>直塞点名的 <code>receive.point</code> 同步带上落点,让跑位者直奔直塞落点迎球</li>
+    </ul>
+    <div class="sec">身后有鬼(man-on,补感知盲区)</div>
+    <ul>
+      <li>持球者背后是视野盲区(160° 前向锥之外),自己看不见背后的逼抢;支援队友(未在跑位时)看到持球者 ~90px 内、攻击方向<b>后方</b>有对手,就广播 <code>shout = { type:'manOn' }</code> 提醒</li>
+      <li>持球者听到后把「逼抢压力」<code>pressF</code> 连续 +0.35(与视野内近身对手<b>合成</b>,不硬开关),更快出球/更保守——只影响决策,不替他做动作</li>
+    </ul>
+    <div class="sec">视野 id 修复(潜在 bug)</div>
+    <ul>
+      <li>修掉一个潜伏 bug:球员对象原本<b>没有唯一 <code>id</code></b>(只有队内 <code>idx</code>),导致 <code>buildView</code> / <code>initMem</code> 的 <code>v[q.id]</code> / <code>mem.buf[q.id]</code> 全部落到同一个 <code>undefined</code> 键——<b>所有对手被感知成同一个人、记忆全共享</b>。补上 <code>id = team:idx</code>,视野/记忆按设计分人生效</li>
+    </ul>
+    <div class="data">验证:eval 15 场(5 配置 × 3)无崩溃、比分正常;直塞仍在(0.3~1/场);传球成功率 85~88%;大脚 11~14/场;身后有鬼(man-on)接入后未过度逼抢(传球成功率未见塌陷)。</div>
   </div>
 
   <div class="v" style="--vc:#3fb950">

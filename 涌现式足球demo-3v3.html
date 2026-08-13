@@ -293,6 +293,19 @@ const matesOf = (p) => (p.team === 'A' ? playersA : playersB);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const dist2 = (ax, ay, bx, by) => Math.hypot(bx - ax, by - ay);
 
+// 呼喊/意图广播(权责分配「我来!」的泛化):队友在半径 R 内"听得到"彼此讲话(越近越清楚),
+// 返回 [{ from, type, tx, ty, until, conf }]。广播是共享上下文,只影响决策,不覆盖力场(同 ADR-10)。
+function hearShouts(p, R) {
+  const out = [];
+  for (const m of matesOf(p)) {
+    if (m === p || !m.shout || simT >= m.shout.until) continue;
+    const d = dist2(p.x, p.y, m.x, m.y);
+    if (d < R) out.push({ from: m, type: m.shout.type, tx: m.shout.tx, ty: m.shout.ty, until: m.shout.until, conf: 1 - d / R });
+  }
+  return out;
+}
+const SHOUT_R = 480;   // 呼喊听半径:队友在 480px 内"听得到"彼此讲话(比视野 380 略大——声音绕得过、不需直视)
+
 // ============ 世界状态 ============
 let playersA = [], playersB = [], ball = null;
 let scoreA = 0, scoreB = 0, matchT = 90, possA = 0, possB = 0, simT = 0;
@@ -354,7 +367,7 @@ function anchorsFor(team, n) {
 
 function makePlayer(team, idx, anchor) {
   return {
-    team, idx, anchor, x: anchor.x, y: anchor.y, vx: 0, vy: 0,
+    team, idx, id: team + ':' + idx, anchor, x: anchor.x, y: anchor.y, vx: 0, vy: 0,
     attrs: { speed: randAttr(), dribble: randAttr(), pass: randAttr(), shoot: randAttr(), vision: randAttr(), defend: randAttr(), body: randAttr(), reflex: 0.7 + Math.random() * 0.6, reach: 0.8 + Math.random() * 0.5 },
     ctrl: false, sprint: false, fx: 0, fy: 0, target: null, thrust: 0,
     cd: 0, pressCd: 0, stagger: 0, role: '', roleAt: -1, receive: null,
@@ -366,6 +379,7 @@ function makePlayer(team, idx, anchor) {
     lookAt: team === 'A' ? 0 : Math.PI, headA: 0, headT: 0, headIdle: Math.random() * 1.5,
     mem: null, view: null, viewAt: -1, patience: 0,
     runAfter: null, feintAt: -10, lastKnock: -10, isGK: false, gkDive: null, protected: 0,
+    shout: null,
     stateMix: 1,
     react: 0.09 + Math.random() * 0.08, decideAt: Math.random() * 0.1
   };
@@ -919,12 +933,21 @@ function gkKick(p) {
     const u = prog / 400 - d / 1400 + central * 0.4 + Math.random() * 0.2;
     if (u > bs) { bs = u; best = t; }
   }
-  let tx, ty;
-  if (best) { tx = best.x + best.vx * 0.6; ty = best.y + best.vy * 0.6; }
-  else { tx = p.x + dg * 420; ty = GOAL_Y + (Math.random() - 0.5) * 100; }
   // 目标必须落在场内安全区(离所有边线留 90px 余量)
+  let tx, ty;
+  if (best) {
+    // 落点=队友攻击方向前方(lead 随其当前前冲速度加码),夹在"他够得着"与"别开到身后"之间
+    const lead = clamp(120 + best.vx * 0.8, 80, 260);
+    tx = best.x + dg * lead;
+    ty = best.y + (GOAL_Y - best.y) * 0.3;
+  } else { tx = p.x + dg * 420; ty = GOAL_Y + (Math.random() - 0.5) * 100; }
   tx = clamp(tx, X0 + 90, X1 - 90);
   ty = clamp(ty, Y0 + 90, Y1 - 90);
+  // 点名接应(可靠信道):直接告诉接球队友"球会落到这里,提前起跑迎球",不依赖他视野里看得到门将。
+  // 之前没点名→接球者先被 0.35s 外推的瞬时位置拉回,再回头追落点,往往追不上(开太大)。
+  if (best) best.receive = { until: simT + 3.0, point: { x: tx, y: ty }, kind: 'gk' };
+  // 广播开大脚意图:附近队友"听"到后提前压上抢二点/退防(共享上下文,不硬指定走位)
+  p.shout = { type: 'gkKick', tx, ty, until: simT + 1.5 };
   const d = Math.max(1, dist2(p.x, p.y, tx, ty));
   ball.ctrl = null; ball.lastTouch = p;
   ball.alt = 40; ball.altV = clamp(d * 0.8, 260, 360);
@@ -1009,7 +1032,11 @@ function decide(p) {
       p.preAt = simT;
     }
     if (p.receive && simT < p.receive.until) {
-      seekTarget(p, lx, ly, 820);
+      // 被点名的接应者:跑向已知落点(receive.point,来自传球/大脚的点名),而非 0.35s 外推的瞬时位置。
+      // 大脚/直塞的点名会给出真实落点,让接球者一步到位迎球,避免"先往回追、再回头跑"。
+      const rx = p.receive.point ? p.receive.point.x : lx;
+      const ry = p.receive.point ? p.receive.point.y : ly;
+      seekTarget(p, rx, ry, 820);
       p.sprint = true;
       p.action = '接应';
       return;
@@ -1289,6 +1316,21 @@ function fieldDrive(p) {
     p.sprint = fast || (pressShare > 0.5 && wd > 0.3) || (mag > 700 && wa > 0.5) || (wd > 0.5 && dBall < 230);
     p.thrust = clamp(300 + mag * 0.55, 380, 820 + 120 * pressShare);
   }
+  // 跑位呼喊(我在跑位!传提前球):攻态下无球目标明显越过球位(冲入前方空当)→广播跑位落点,
+  // 持球队友"听"到后即便视野里没看清我,也会往我落点送直塞(见 pickKick 的 runShout)。
+  const offering = wa > 0.5 && p.target && (p.target.x - ball.x) * dg > 70;
+  if (offering) {
+    p.shout = { type: 'run', tx: p.target.x, ty: p.target.y, until: simT + 0.6 };
+  } else if (holder && holder.team === p.team) {
+    // 身后有鬼(man-on):持球者背后是视野盲区,我留在附近能看到就喊一声,补他的感知盲区。
+    // 只影响他的决策压力(pickKick 里 manOn→pressF 连续加成),不替他做动作——协调离散、运动仍涌现。
+    for (const o of vopps) {
+      if (dist2(o.x, o.y, holder.x, holder.y) < 90 && (o.x - holder.x) * dirX(holder) < 0) {
+        p.shout = { type: 'manOn', until: simT + 0.5 };
+        break;
+      }
+    }
+  }
   p.action = wd > 0.5 ? (fast ? '反击跑位' : '防守站位') : (fast ? '反击跑位' : '进攻跑位');
 }
 
@@ -1336,7 +1378,15 @@ function pickKick(p) {
     const d = dist2(o.x, o.y, p.x, p.y);
     if (d < npd) { npd = d; nearPress = o; }
   }
-  const pressF = nearPress ? clamp(1 - npd / 70, 0, 1) : 0;
+  // 我"听"得到的呼喊(半径 SHOUT_R 内,越近越清楚):run=跑位(直塞选落点)、manOn=身后有鬼(补感知盲区)
+  const heardRun = {};
+  let manOn = false;
+  for (const sh of hearShouts(p, SHOUT_R)) {
+    if (sh.type === 'run') heardRun[sh.from.id] = sh;
+    else if (sh.type === 'manOn') manOn = true;
+  }
+  // 逼抢压力:我视野里看到的近身对手 + 队友喊"背后有人"(我看不到的盲区)——连续合成,不硬开关
+  const pressF = clamp((nearPress ? clamp(1 - npd / 70, 0, 1) : 0) + (manOn ? 0.35 : 0), 0, 1);
   const desperate = p.patience > 2.5;
   const stuckF = clamp(stuck[p.team] / 6, 0, 1);  // 全队卡顿连续量:不推进的传球积累/有效前传缓解
   const risk = teamRisk(p.team) + (desperate ? 0.3 : 0) + 0.2 * stuckF;
@@ -1381,11 +1431,20 @@ function pickKick(p) {
     //   4) 完成率显著低于传脚(踢进空当更难完成),只有「传脚被盯死」或「跑位者前方大空当」时才胜出。
     const ahead = (t.x - p.x) * dg > 0;
     const runForward = (t.vx * dg > 0) || (t.runAfter && simT < t.runAfter.until);
-    if (!t.isGK && (t.x - p.x) * dg > -30 && (ahead || runForward)) {
+    // 跑位呼喊:队友明确喊"我在往 X 跑"——即便他此刻背对/在我身后,也值得往他落点送直塞
+    const runShout = heardRun[t.id] || null;
+    if (!t.isGK && (t.x - p.x) * dg > -30 && (ahead || runForward || runShout)) {
       const room = Math.max(40, (goalX(t) - t.x) * dg);
       const lead = clamp(room * 0.35, 60, 200);
-      const thx = clamp(t.x + dg * lead, X0 + 24, X1 - 24);
-      const thy = clamp(t.y + (GOAL_Y - t.y) * 0.12, Y0 + 24, Y1 - 24);
+      let thx, thy;
+      if (runShout) {
+        // 信任队友喊的落点,不再猜"他身前多少"
+        thx = clamp(runShout.tx, X0 + 24, X1 - 24);
+        thy = clamp(runShout.ty, Y0 + 24, Y1 - 24);
+      } else {
+        thx = clamp(t.x + dg * lead, X0 + 24, X1 - 24);
+        thy = clamp(t.y + (GOAL_Y - t.y) * 0.12, Y0 + 24, Y1 - 24);
+      }
       if ((thx - p.x) * dg > 40) {
         const tSpd = 235 * t.attrs.speed * 1.15;
         const tReach = dist2(t.x, t.y, thx, thy) / tSpd;
@@ -1398,7 +1457,8 @@ function pickKick(p) {
         dens = clamp(dens, 0, 1);
         const chanTh = passLineClear(p.x, p.y, thx, thy, vopps) ? 1 : 0;
         const hTh = 1 - chanTh;
-        const succTh = 0.5 * reachOk * (1 - 0.55 * dens) * (chanTh ? 0.9 : 0.45);
+        // 喊位加成:队友已声明落点→完成率更高(他是主动跑向那里,不是原地等人)
+        const succTh = 0.5 * reachOk * (1 - 0.55 * dens) * (chanTh ? 0.9 : 0.45) * (runShout ? 1.15 : 1);
         const progTh = clamp(((thx - p.x) * dg + 200) / 400, 0, 1.2);
         const uTh = (progTh + safety + progBias) * succTh * TUN.pass * (1 + hTh * 0.6 * TUN.loft) * counterB * risk + (Math.random() - 0.5) * 0.05;
         if (uTh > bu) {
@@ -1543,7 +1603,7 @@ function fireKick(p) {
       else stuck[p.team] = Math.max(0, stuck[p.team] - 1);
     }
     pendingPass = { p, t: a.t, at: simT };
-    a.t.receive = { until: simT + 2.0 };
+    a.t.receive = a.through ? { until: simT + 2.0, point: { x: a.tx, y: a.ty } } : { until: simT + 2.0 };
     p.runAfter = { until: simT + 1.5 };
     const passLabel = a.through ? '直塞' : (a.alt > 15 ? '高空球' : '传球');
     p.label = passLabel; p.labelT = 0.7;
@@ -1982,8 +2042,8 @@ function goalKick(team) {
 }
 
 function kickoffPositions() {
-  playersA.forEach((p, i) => { const a = p.isGK ? p.anchor : anchorsFor('A', playersA.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.preCand = null; p.preAt = -1e9; p.feintAt = -10; p.gkDive = null; p.protected = 0; });
-  playersB.forEach((p, i) => { const a = p.isGK ? p.anchor : anchorsFor('B', playersB.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.preCand = null; p.preAt = -1e9; p.feintAt = -10; p.gkDive = null; p.protected = 0; });
+  playersA.forEach((p, i) => { const a = p.isGK ? p.anchor : anchorsFor('A', playersA.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.preCand = null; p.preAt = -1e9; p.feintAt = -10; p.gkDive = null; p.protected = 0; p.shout = null; });
+  playersB.forEach((p, i) => { const a = p.isGK ? p.anchor : anchorsFor('B', playersB.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.preCand = null; p.preAt = -1e9; p.feintAt = -10; p.gkDive = null; p.protected = 0; p.shout = null; });
   ball.x = (X0 + X1) / 2; ball.y = GOAL_Y; ball.vx = 0; ball.vy = 0; ball.alt = 0; ball.altV = 0;
   ball.ctrl = null; ball.lastTouch = null; ball.saveGK = null; ball.dead = false;
   deadBall = null;
@@ -2516,7 +2576,7 @@ function sbExportInstant() {
   const snap = {
     meta: {
       type: '足球模拟 · 情景快照',
-      version: 'v4.11',
+      version: 'v4.12',
       exportedAt: new Date().toLocaleString(),
       note: '此刻的静态瞬间:ball=球(ctrl=持球者, claim=认领者), players=每位球员(decision=当前决策, target=决策目标点)。x/y 是球场世界坐标(960×600)。'
     },
@@ -2592,7 +2652,7 @@ cvEl.addEventListener('mousemove', function (e) {
     const p = sbDrag.p;
     p.x = cx; p.y = cy; p.vx = 0; p.vy = 0;
     // 清掉临时状态,让布阵后是干净的静态场景
-    p.windup = 0; p.windAct = null; p.runAfter = null; p.receive = null; p.preCand = null; p.stagger = 0; p.cd = 0;
+    p.windup = 0; p.windAct = null; p.runAfter = null; p.receive = null; p.preCand = null; p.stagger = 0; p.cd = 0; p.shout = null;
     if (ball.ctrl === p) { ball.x = cx; ball.y = cy; }
   }
   draw();
