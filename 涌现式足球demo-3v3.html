@@ -1134,6 +1134,11 @@ function fieldDrive(p) {
   const claimedByOther = !holder && myClaim && myClaim.p !== p;
   const claimDamp = claimedByOther ? 0.15 : 1;
 
+  // 门将抱球保护(现实中的"禁区内不得干扰抱球门将"):对方球员在保护期内必须退开,
+  // 否则无敌一结束又被贴身抢——用连续斥力把对手清出门将周边,而不是硬禁止
+  const gkHold = holder && holder.isGK && simT < holder.protected;
+  const oppRetreat = gkHold && holder.team !== p.team;
+
   // 就近份额(连续,替代旧"扑球资格状态机"):防守/自由球时,我比最近的队友越近,越该扑球。
   // 攻防转换由 stateMix 平滑,分工由 nearF(绝对近球)+ pressShare(相对队友)两股连续量涌现,不设离散状态机
   let pressShare = 0;                       // 进攻时=0,不扑球
@@ -1166,8 +1171,14 @@ function fieldDrive(p) {
     const ty = holder ? holder.y : ball.y;
     const d = Math.max(1, dist2(p.x, p.y, tx, ty));
     const nearF = 0.15 + 0.85 * clamp(1 - d / 350, 0, 1);
-    const s = FT.ballStr * nearF * (0.25 + 1.65 * pressShare) * (0.6 + 0.8 * FT.aggro) * mix('ball') * claimDamp;
+    const s = FT.ballStr * nearF * (0.25 + 1.65 * pressShare) * (0.6 + 0.8 * FT.aggro) * mix('ball') * claimDamp * (oppRetreat ? 0 : 1);
     fx += (tx - p.x) / d * s; fy += (ty - p.y) / d * s;
+  }
+  // 2c. 门将抱球保护:对方球员退开门将(清出 ~200px 半径),不能贴着等无敌结束再抢
+  if (oppRetreat) {
+    const d = Math.max(1, dist2(p.x, p.y, holder.x, holder.y));
+    const s = 900 * clamp(1 - d / 200, 0, 1);
+    fx += (p.x - holder.x) / d * s; fy += (p.y - holder.y) / d * s;
   }
   // 2b. 封堵位力(防守非扑球者,连续):站"球→己方门"连线靠球侧,封锁直塞/射门路线;
   //     (1-pressShare)×wd 让扑球者不封堵、封堵者不扑球,且只在防守激活——平滑分工
