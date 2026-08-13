@@ -81,6 +81,19 @@
   #log .good { color: #3fb950; }
   #log .tel { color: #7d8590; }
 
+  #sandboxBar { background: #161b22; border: 1px solid #2d3748; border-top: none; border-radius: 0 0 10px 10px; padding: 8px 14px; font-size: 12px; }
+  #sbBtns { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  #sbBtns button { background: #1c2330; color: #e6edf3; border: 1px solid #2d3748; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  #sbBtns button:hover { border-color: #3fb950; background: #212b3a; }
+  #sbBtns button.on { color: #0d1117; background: #3fb950; border-color: #3fb950; font-weight: 600; }
+  #sbHint { color: #8b949e; font-size: 11px; }
+  #sbOut { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+  #sbOut .sb { background: #1c2330; border: 1px solid #2d3748; border-radius: 6px; padding: 4px 8px; font-size: 11.5px; color: #c9d1d9; }
+  #sbOut .sb b { color: #e6edf3; }
+  #sbOut .sb.r { border-left: 3px solid #f85149; }
+  #sbOut .sb.b { border-left: 3px solid #58a6ff; }
+
+
   #overlay {
     position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
     background: rgba(6, 10, 14, .78); backdrop-filter: blur(2px); z-index: 10; gap: 14px;
@@ -153,8 +166,8 @@
   <label>空位力 <input type="range" data-fk="spaceStr" min="150" max="500" step="10" value="300"><span></span></label>
   <label>空位带宽 <input type="range" data-fk="spaceBW" min="40" max="120" step="5" value="70"><span></span></label>
   <label>带宽纵横比 <input type="range" data-fk="spaceAspect" min="1" max="2.5" step="0.1" value="1.6"><span></span></label>
-  <label>阵型吸附 <input type="range" data-fk="homeStr" min="100" max="500" step="10" value="260"><span></span></label>
-  <label>随球平移 <input type="range" data-fk="homeShift" min="0" max="1" step="0.05" value="0.5"><span></span></label>
+  <label>阵型吸附 <input type="range" data-fk="homeStr" min="100" max="600" step="10" value="500"><span></span></label>
+  <label>随球平移 <input type="range" data-fk="homeShift" min="0" max="1" step="0.05" value="0.35"><span></span></label>
   <label>球引力 <input type="range" data-fk="ballStr" min="120" max="500" step="10" value="260"><span></span></label>
   <label>门保护 <input type="range" data-fk="goalStr" min="150" max="500" step="10" value="320"><span></span></label>
   <label>弹簧刚度 <input type="range" data-fk="structK" min="0.2" max="0.9" step="0.05" value="0.5"><span></span></label>
@@ -192,6 +205,7 @@
       <label><input type="checkbox" id="ckLabels" checked>动作标签</label>
       <label><input type="checkbox" id="ckTlm">遥测日志</label>
       <button id="btnReset">重新开局</button>
+      <button id="btnSandbox">情景沙盒</button>
       <button id="btnExport">导出日志</button>
     </div>
   </div>
@@ -203,13 +217,27 @@
     </table>
   </div>
   <div id="log"></div>
+  <div id="sandboxBar" style="display:none">
+    <div id="sbBtns">
+      <button id="sbCompute">计算决策</button>
+      <button id="sbStep">下一步(1帧)</button>
+      <button id="sbStep30">推进0.5s</button>
+      <button id="sbReset">重置布阵</button>
+      <button id="sbExit">退出沙盒</button>
+      <span id="sbHint">点选球员/球(绿圈高亮)再拖动即可移动 · 球拖到球员身上=给他球,拖到空地=自由球 · 点空白处取消选中 · 先用上方「红/蓝球员人数」设好 2v1 等场景</span>
+    </div>
+    <div id="sbOut"></div>
+  </div>
   <details>
     <summary>这个 Demo 的架构说明(对应规划文档)</summary>    <ul>
       <li><b>感知层</b>:球员按"视野"属性带误差地感知球的位置(离得越远越不准),不是上帝视角。</li>
-      <li><b>决策层</b>:控球者给"射门/传球/带球/过人"各自算效用值,选最大的执行(传球看通道是否被挡);无球者按攻/守/自由球角色定位,角色切换有 0.4s 滞回防抖动;队友传球后接应者会迎球跑。传球/射门带<b>蓄力</b>:准备时间与力度成正比,门前轻推≈0.1s、远射/长传≈0.45s,蓄力期间站定且可被抢断。</li>
+      <li><b>决策层(控球者)</b>:统一对球作用——射门/传球/趟球/解围/过人五个候选共用同一套"收益×成功率×风格权重×风险"效用:踢向队友=传球、踢向球门=射门、踢向身前=趟球、踢向安全区=解围、踢向对手侧后=过人,全部由局势连续推出,没有动作特判分支。传球/射门带<b>蓄力</b>:准备时间与力度成正比,门前轻推≈0.1s、远射/长传≈0.45s,蓄力期间站定且可被抢断。</li>
+      <li><b>决策层(无球者,力场)</b>:空间智能 = 七力叠加(阵型/球引力/门保护/结构弹簧/盯人/空位密度场/通道)+ 攻防权重模板——职责不是离散角色,而是权重投影;攻防转换按 recoverRate 平滑,逼抢分工由"就近份额"连续涌现(最近者扑、其余人封堵,中间是坡度不是开关)。</li>
+      <li><b>合理状态机(例外)</b>:门将(扑救/出击/选位/大脚)、死球发球人、蓄力/踉跄/身体对抗掷骰——这些是真正离散的职责,保留状态机;空间与分工不设主控层硬切。</li>
+      <li><b>AI 对踢开关</b>:红/蓝各可选"力场"或"旧逻辑"AI,默认力场;URL 加 <code>?aiA=old&amp;aiB=old</code> 可回旧逻辑对踢。</li>
       <li><b>赛后数据</b>:比赛结束弹出每位球员的 进球/助攻/射门命中率/传球成功率/过人成功率/抢断成功率/拦截成功率/头球成功率,以及可切换查看的<b>活动热区图</b>(蓝→红表示停留时间)。</li>
-      <li><b>调参面板</b>:左侧滑条实时调整 决策倾向(传球/射门/过人/带球)、空间价值权重、防守站位权重、对手斥力/踉跄时长/蓄力时间,改完立即生效。</li>
-      <li><b>空间价值定位</b>:无球球员对候选位置打分(开放度 / 传球通道 / 推进价值 / 宽度 / 个人车道),选"对比赛最有利"的点——拉开空间是因为这块地方有用,不是被迫离队友远;防守站线时兼顾封堵持球者的传球通道。</li>
+      <li><b>调参面板</b>:左侧滑条实时调整 决策倾向(传球/射门/过人/带球/高空)、力场参数(阵型/球引力/空位/盯人/通道等 13 项)、物理节奏(斥力/踉跄/蓄力),改完立即生效。</li>
+      <li><b>旧逻辑(可选基线)</b>:保留 v2.x 的"角色定位 + 5×5 网格空间价值打分"作为对踢基线,仅在选"旧逻辑"AI 时启用;它与力场并行,用于验证力场是否真的更好。</li>
       <li><b>驱动层</b>:球员受 目标力 + 斥力(对手为主,队友极弱)+ 惯性 + 摩擦 驱动,不是瞬间瞬移。</li>
       <li><b>涌现点</b>:传球被拦、射门被封堵,全部由"球碰到对方球员身体 → 反弹"这条物理规则自然产生,没有任何特判代码;拦截反弹方向随机,拦截者会踉跄,不会出现乒乓式反复拦截。</li>
       <li><b>抢断与身体对抗</b>:逼抢时按双方"身体对抗"属性掷骰——胜者夺球,败者踉跄(减速、短暂无法再抢/接球),得球一方也要先稳住重心,符合真实比赛节奏。</li>
@@ -274,6 +302,7 @@ const allPlayers = () => [...playersA, ...playersB];
 // 调参(可被左侧面板实时修改)
 const TUN = { pass: 1, shoot: 1, trick: 1, dribble: 1, wo: 0.3, wc: 0.3, wp: 0.2, wW: 0.13, wL: 0.12, dDeny: 0.35, dOpen: 0.3, dLane: 0.35, rep: 300, stag: 1, wind: 1, dLine: 0.35, press: 1, sDepth: 1, loft: 1 };
 let transT = { A: 0, B: 0 };  // 反击爆发计时(夺回球权后)
+let stuck = { A: 0, B: 0 };   // 全队卡顿计时:不推进的传球积累、有效前传缓解——传控死循环的连续逃生阀
 
 // ============ v4 规则力空间智能(与旧逻辑并行,支持新旧对踢) ============
 // 范式:所有移动 = 同一套力场叠加,职责/状态 = 权重模板,无离散角色逻辑
@@ -290,7 +319,7 @@ const aiVerOf = (p) => AI_VER[p.team];
 
 // 力场参数(Step1 默认值,后续进调参面板)
 const FT = {
-  homeStr: 260, homeShift: 0.5, ballStr: 260, goalStr: 320,
+  homeStr: 500, homeShift: 0.35, ballStr: 260, goalStr: 320,
   structK: 0.5, structR: 110, markBase: 234,
   spaceStr: 300, spaceBW: 70, spaceAspect: 1.6, chanStr: 197,
   aggro: 1, recoverRate: 2.5
@@ -356,13 +385,14 @@ function kickoff() {
   }
   initTlm();
   bindHeat();
-  ball = { x: (X0 + X1) / 2, y: GOAL_Y, vx: 0, vy: 0, alt: 0, altV: 0, headCd: 0, saveGK: null, dead: false, ctrl: null, lastTouch: null };
+  ball = { x: (X0 + X1) / 2, y: GOAL_Y, vx: 0, vy: 0, alt: 0, altV: 0, headCd: 0, saveGK: null, dead: false, ctrl: null, lastTouch: null, claim: null };
   trail.length = 0;
   scoreA = 0; scoreB = 0; matchT = 90; possA = 0; possB = 0; simT = 0;
   paused = false; running = true; finalText = '';
   pendingPass = null; pendingClaim = null; lastCpass = null;
   heatTimer = 0;
   transT.A = 0; transT.B = 0;
+  stuck.A = 0; stuck.B = 0;
   xgA = 0; xgB = 0;
   document.getElementById('overlay').classList.add('hidden');
   log('比赛开始 · 红队(右攻) vs 蓝队(左攻)', '');
@@ -793,8 +823,13 @@ function gkSave(gk) {
     gk.label = '没收'; gk.labelT = 0.8;
     log(`${teamName[gk.team]}门将 没收!`, 'good');
   } else {
-    ball.vx = -ball.vx * 0.12;
-    ball.vy = (Math.random() - 0.5) * 200;
+    // 扑出:明确往"远离自家门"的方向打(并偏向一侧边线),而不是弱反弹+随机——
+    // 弱反弹(×0.12)会让球在门前原地晃、甚至被顶回自家网(乌龙观感),随机横向还可能把球留在危险区
+    const dg = dirX(gk);
+    ball.vx = (Math.abs(ball.vx) * 0.3 + 150) * dg;
+    ball.vy = (ball.y < GOAL_Y ? -1 : 1) * (70 + Math.random() * 130);
+    ball.alt = 0; ball.altV = 0; ball.bend = 0;
+    ball.lastTouch = gk;
     gk.label = '扑出'; gk.labelT = 0.8;
     gk.stagger = Math.max(gk.stagger, 0.3 * TUN.stag);
     log(`${teamName[gk.team]}门将 扑出!`, 'good');
@@ -956,18 +991,23 @@ function decide(p) {
   }
 
   // —— 接应:队友传球后迎球跑(追预测落点,而不是原地等球) ——
-  if (p.receive && simT < p.receive.until) {
-    if (ball.ctrl === p) p.receive = null;
-    else if (ball.ctrl === null && ball.lastTouch && ball.lastTouch.team === p.team) {
-      // 预测落点:球速外推 0.35s(地面摩擦已含在 vx 里,近似直线)
-      const lx = clamp(pb.x + pb.vx * 0.35, X0 + PR + 4, X1 - PR - 4);
-      const ly = clamp(pb.y + pb.vy * 0.35, Y0 + PR + 4, Y1 - PR - 4);
+  if (ball.ctrl === null && ball.lastTouch && ball.lastTouch.team === p.team) {
+    // 预测落点:球速外推 0.35s(地面摩擦已含在 vx 里,近似直线)
+    const lx = clamp(pb.x + pb.vx * 0.35, X0 + PR + 4, X1 - PR - 4);
+    const ly = clamp(pb.y + pb.vy * 0.35, Y0 + PR + 4, Y1 - PR - 4);
+    // 一脚出球预备:靠近落点的队友都提前决策出球(不限于被标记的接应者),接球瞬间可一脚出
+    if (dist2(p.x, p.y, lx, ly) < 130) {
+      p.preCand = pickKick(p);
+      p.preAt = simT;
+    }
+    if (p.receive && simT < p.receive.until) {
       seekTarget(p, lx, ly, 820);
       p.sprint = true;
       p.action = '接应';
       return;
-    } else p.receive = null;
+    }
   }
+  if (p.receive) p.receive = null;
 
   // —— 二过一:传完球立刻前插(撞墙配合),队友可直塞回来 ——
   if (p.runAfter && holder && holder.team === p.team && simT < p.runAfter.until) {
@@ -1011,8 +1051,9 @@ function fieldSpace(p, vopps, dist, aspect, attackBias) {
   let bx = 0, by = 0, bw = 0;
   for (let i = 0; i < N; i++) {
     const ang = base + (i / (N - 1) - 0.5) * (2.4);  // ±120°
-    const sx = p.x + Math.cos(ang) * dist;
-    const sy = p.y + Math.sin(ang) * dist;
+    // 采样点夹回场内:场外不是"真空位"——边线外不可站人,不能把球员往界外吸
+    const sx = clamp(p.x + Math.cos(ang) * dist, X0 + PR + 6, X1 - PR - 6);
+    const sy = clamp(p.y + Math.sin(ang) * dist, Y0 + PR + 6, Y1 - PR - 6);
     let den = 1e-6;
     for (const o of vopps) {
       const dx = (sx - o.x) / FT.spaceBW, dy = (sy - o.y) / (FT.spaceBW * FT.spaceAspect);
@@ -1028,6 +1069,48 @@ function fieldSpace(p, vopps, dist, aspect, attackBias) {
   return { x: bx / m, y: by / m };
 }
 
+// ============ 球权仲裁(认领信号「我来!」) ============
+// 力场解决「怎么移动」,但「谁去接这颗自由球」是离散共识问题——不能靠每个球员独立算力场涌现。
+// 需要一次轻量裁决 + 一份共享上下文(谁认领了球),这正是 ADR-10 允许的「真正离散职责」例外。
+// 认领只做一件事:压掉非认领者的抢球力(球引力/迎球力);认领者本身仍由力场驱动移动,不额外指定走位。
+const CLAIM_HOLD = 0.4;   // 认领最短持有期:防止每帧换人导致的抖动
+
+// 谁先到预测落点(时间最短)谁认领:距离 ÷ 冲刺速度,速度属性参与仲裁
+function interceptReach(p) {
+  const Tp = 0.35;
+  const lx = clamp(ball.x + ball.vx * Tp, X0 + PR + 4, X1 - PR - 4);
+  const ly = clamp(ball.y + ball.vy * Tp, Y0 + PR + 4, Y1 - PR - 4);
+  const d = Math.max(1, dist2(p.x, p.y, lx, ly));
+  return d / (235 * p.attrs.speed * 1.15);
+}
+
+function arbitrateClaim() {
+  if (!ball.claim) ball.claim = { A: null, B: null, at: -1e9 };
+  if (ball.ctrl) { ball.claim.A = null; ball.claim.B = null; ball.claim.at = simT; return; }
+  for (const team of ['A', 'B']) {
+    const cur = ball.claim[team];
+    if (cur && simT - cur.at < CLAIM_HOLD) continue;   // 持有期内不换人
+    const mates = team === 'A' ? playersA : playersB;
+    // 1) 己方传出的球正在飞行 → 指定接应者天然是认领者(不用再仲裁)
+    let best = null;
+    if (pendingPass && pendingPass.p.team === team && !pendingPass.t.isGK) best = pendingPass.t;
+    let bestReach = best ? interceptReach(best) : 1e9;
+    // 2) 否则(自由球/二点球)按「谁先到落点」仲裁
+    if (!best) {
+      for (const p of mates) {
+        if (p.isGK) continue;
+        const r = interceptReach(p);
+        if (r < bestReach) { bestReach = r; best = p; }
+      }
+    }
+    // 机会门:确实有机会拿到(不比对方最佳慢太多)才喊「我来」;否则谁都别退,继续正常争抢
+    const opps = team === 'A' ? playersB : playersA;
+    let oppReach = 1e9;
+    for (const o of opps) if (!o.isGK) oppReach = Math.min(oppReach, interceptReach(o));
+    ball.claim[team] = (best && bestReach <= oppReach + 0.25) ? { p: best, at: simT } : null;
+  }
+}
+
 function fieldDrive(p) {
   const holder = ball.ctrl;
   const dg = dirX(p);
@@ -1038,21 +1121,22 @@ function fieldDrive(p) {
   const wa = 1 - mx, wd = mx;
   const mix = (k) => wd * W_DEF[k] + wa * W_ATT[k];
 
-  // 主控层阶段(状态机):关键力按阶段硬开关——space/chan 在防守瞬间立即掐断,不随平滑残留
-  const phase = holder ? (holder.team === p.team ? 'att' : 'def') : 'loose';
-  const spaceOn = phase === 'att' ? 1 : (phase === 'loose' ? 0.5 : 0.08);
-  const chanOn = phase === 'att' ? 1 : 0;
+  // 认领上下文:队友已喊「我来」→ 我不是这颗球的负责人,退到无球职责(球引力/迎球力压到 0.15)
+  const myClaim = ball.claim && ball.claim[p.team];
+  const claimedByOther = !holder && myClaim && myClaim.p !== p;
+  const claimDamp = claimedByOther ? 0.15 : 1;
 
-  // 主控层:扑球资格状态机——防守/自由球时,离球最近的无球球员有扑球资格(冲刺扑抢),
-  // 其余人球引力降为"封堵位"(站球与己方门连线,封锁直塞/射门)——防三人齐扑,分工涌现
-  let presser = false;
-  if (phase !== 'att') {
-    let closer = 0;
+  // 就近份额(连续,替代旧"扑球资格状态机"):防守/自由球时,我比最近的队友越近,越该扑球。
+  // 攻防转换由 stateMix 平滑,分工由 nearF(绝对近球)+ pressShare(相对队友)两股连续量涌现,不设离散状态机
+  let pressShare = 0;                       // 进攻时=0,不扑球
+  if (!holder || holder.team !== p.team) {  // 防守/自由球才谈扑球
+    let nearestMateD = 1e9;
     for (const m of matesOf(p)) {
       if (m === p || m.isGK) continue;
-      if (dist2(m.x, m.y, ball.x, ball.y) < dist2(p.x, p.y, ball.x, ball.y)) closer++;
+      nearestMateD = Math.min(nearestMateD, dist2(m.x, m.y, ball.x, ball.y));
     }
-    presser = closer === 0;
+    const myD = dist2(p.x, p.y, ball.x, ball.y);
+    pressShare = clamp(1 - (myD - nearestMateD) / 180, 0, 1);  // 我明显最近→1,远落后→0
   }
 
   // 阵型锚点(随球平移)
@@ -1068,24 +1152,27 @@ function fieldDrive(p) {
     const s = FT.homeStr * clamp(d / 320, 0, 1) * mix('home');
     fx += (ax - p.x) / d * s; fy += (ay - p.y) / d * s;
   }
-  // 2. 球引力:防守拉向球——有扑球资格者全强度冲刺,其余人仅微弱吸引(站位由门保护/封堵位决定);
-  //    进攻拉向球前方接应点
+  // 2. 球引力:防守拉向球(就近者扑得最狠),进攻拉向球前方接应点
   {
     const tx = holder ? holder.x + dg * 110 * wa : ball.x;
     const ty = holder ? holder.y : ball.y;
     const d = Math.max(1, dist2(p.x, p.y, tx, ty));
     const nearF = 0.15 + 0.85 * clamp(1 - d / 350, 0, 1);
-    const s = FT.ballStr * nearF * (presser ? 1.9 : 0.25) * (0.6 + 0.8 * FT.aggro) * mix('ball');
+    const s = FT.ballStr * nearF * (0.25 + 1.65 * pressShare) * (0.6 + 0.8 * FT.aggro) * mix('ball') * claimDamp;
     fx += (tx - p.x) / d * s; fy += (ty - p.y) / d * s;
   }
-  // 2b. 封堵位力(防守非扑球者):站"球→己方门"连线靠球侧,封锁直塞/射门路线
-  if (!presser && phase === 'def') {
-    const gkx = ownGoalX(p);
-    const bx2 = ball.x + (gkx - ball.x) * 0.45;
-    const by2 = ball.y + (GOAL_Y - ball.y) * 0.45;
-    const d = Math.max(1, dist2(p.x, p.y, bx2, by2));
-    const s = FT.goalStr * 0.55 * mix('goal');
-    fx += (bx2 - p.x) / d * s; fy += (by2 - p.y) / d * s;
+  // 2b. 封堵位力(防守非扑球者,连续):站"球→己方门"连线靠球侧,封锁直塞/射门路线;
+  //     (1-pressShare)×wd 让扑球者不封堵、封堵者不扑球,且只在防守激活——平滑分工
+  {
+    const blockW = (1 - pressShare) * wd;
+    if (blockW > 0.05) {
+      const gkx = ownGoalX(p);
+      const bx2 = ball.x + (gkx - ball.x) * 0.45;
+      const by2 = ball.y + (GOAL_Y - ball.y) * 0.45;
+      const d = Math.max(1, dist2(p.x, p.y, bx2, by2));
+      const s = FT.goalStr * 0.55 * blockW;
+      fx += (bx2 - p.x) / d * s; fy += (by2 - p.y) / d * s;
+    }
   }
   // 3. 门保护:站"球→己方门"线上,按车道分散(防 3 人抱团中路,边路留人);
   //    自己贴近持球者时门保护自动让位给球引力(贴身逼抢优先于站线)
@@ -1129,16 +1216,16 @@ function fieldDrive(p) {
       fx += (mx2 - p.x) / dm * s; fy += (my2 - p.y) / dm * s;
     }
   }
-  // 6. 空位力:方向采样密度场(采样距离随状态:反击最远,防守最短;防守阶段硬掐断)
+  // 6. 空位力:方向采样密度场(采样距离随状态:反击最远,防守最短;攻防强度由 mix('space') 平滑衰减)
   {
     const dist = fast ? 240 : (wd > 0.5 ? 110 : 200);
     const sv = fieldSpace(p, vopps, dist, FT.spaceAspect, wa);
-    const s = FT.spaceStr * (0.35 + 0.65 * wa) * (fast ? 1.4 : 1) * mix('space') * spaceOn;
+    const s = FT.spaceStr * (0.35 + 0.65 * wa) * (fast ? 1.4 : 1) * mix('space');
     fx += sv.x * s; fy += sv.y * s;
   }
   // 7. 通道力(攻态):只对离持球者最近的无球者生效(1 人短传接应),
   //    其他无球者由空间力主导跑位(渗透/宽度/插身后)——传控结构:1接应+1渗透
-  if (holder && holder.team === p.team && chanOn > 0) {
+  if (holder && holder.team === p.team) {
     let closest = 1e9;
     for (const m of matesOf(p)) {
       if (m === holder || m.isGK) continue;
@@ -1150,12 +1237,12 @@ function fieldDrive(p) {
       const cx = holder.x + dg * 115;
       const d = Math.max(1, dist2(p.x, p.y, cx, p.y));
       const err = d - 60;  // 理想接应纵深差
-      const s = FT.chanStr * clamp(Math.abs(err) / 140, 0, 1) * (err > 0 ? 1 : -1) * mix('chan') * chanOn;
+      const s = FT.chanStr * clamp(Math.abs(err) / 140, 0, 1) * (err > 0 ? 1 : -1) * mix('chan');
       fx += (cx - p.x) / d * s; fy += 0;
     }
   }
   // 8. 迎球力:己方传出的自由球朝自己飞来时,被预测落点吸引(接球调整移动)
-  if (!ball.ctrl && ball.lastTouch && ball.lastTouch.team === p.team && phase !== 'def') {
+  if (!ball.ctrl && ball.lastTouch && ball.lastTouch.team === p.team && p.stateMix < 0.6) {
     const d = Math.max(1, dist2(p.x, p.y, ball.x, ball.y));
     const spd = Math.hypot(ball.vx, ball.vy);
     if (spd > 120 && d < 280) {
@@ -1163,7 +1250,7 @@ function fieldDrive(p) {
       if (relV < -60) {  // 球在靠近自己
         const tx = clamp(ball.x + ball.vx * 0.3, X0 + PR + 4, X1 - PR - 4);
         const ty = clamp(ball.y + ball.vy * 0.3, Y0 + PR + 4, Y1 - PR - 4);
-        const s = 560 * clamp(1 - d / 280, 0.2, 1);
+        const s = 560 * clamp(1 - d / 280, 0.2, 1) * claimDamp;
         fx += (tx - p.x) / d * s; fy += (ty - p.y) / d * s;
       }
     }
@@ -1178,10 +1265,10 @@ function fieldDrive(p) {
     if (!p.ftx) { p.ftx = tx; p.fty = ty; }
     else { p.ftx += (tx - p.ftx) * 0.35; p.fty += (ty - p.fty) * 0.35; }
     p.target = { x: clamp(p.ftx, X0 + PR + 4, X1 - PR - 4), y: clamp(p.fty, Y0 + PR + 4, Y1 - PR - 4) };
-    // 速度对齐:扑球资格者全力冲刺(匹配旧逻辑逼抢 830+sprint),防态近球也冲刺
+    // 速度对齐:就近者(扑球份额高)全力冲刺(匹配旧逻辑逼抢 830+sprint),防态近球也冲刺
     const dBall = Math.max(1, dist2(p.x, p.y, ball.x, ball.y));
-    p.sprint = fast || presser || (mag > 700 && wa > 0.5) || (wd > 0.5 && dBall < 230);
-    p.thrust = clamp(300 + mag * 0.55, 380, presser ? 940 : 820);
+    p.sprint = fast || (pressShare > 0.5 && wd > 0.3) || (mag > 700 && wa > 0.5) || (wd > 0.5 && dBall < 230);
+    p.thrust = clamp(300 + mag * 0.55, 380, 820 + 120 * pressShare);
   }
   p.action = wd > 0.5 ? (fast ? '反击跑位' : '防守站位') : (fast ? '反击跑位' : '进攻跑位');
 }
@@ -1232,7 +1319,8 @@ function pickKick(p) {
   }
   const pressF = nearPress ? clamp(1 - npd / 70, 0, 1) : 0;
   const desperate = p.patience > 2.5;
-  const risk = teamRisk(p.team) + (desperate ? 0.3 : 0);
+  const stuckF = clamp(stuck[p.team] / 6, 0, 1);  // 全队卡顿连续量:不推进的传球积累/有效前传缓解
+  const risk = teamRisk(p.team) + (desperate ? 0.3 : 0) + 0.2 * stuckF;
   const oppGK = gkOf(p.team === 'A' ? 'B' : 'A');
 
   let best = null, bu = -1e9;
@@ -1245,6 +1333,10 @@ function pickKick(p) {
     const ptx = clamp(t.x + t.vx * Tf + dg * 12, X0 + 24, X1 - 24);
     const pty = clamp(t.y + t.vy * Tf, Y0 + 24, Y1 - 24);
     const isBack = (t.x - p.x) * dg < 0;
+    // 回传惩罚:我刚接到来球就立刻背身传回给同一个人(两人原地对传不推进)——只在刚接球后短时生效,
+    // 逼着找第三人/转身/射门;真被逼到没出路时它仍是保底最优项,允许回传。
+    // 只罚"背身回传",不罚撞墙二过一/向前直塞(那些是向前,由 progN 正常评估)
+    const isReturn = lastCpass && lastCpass.t === p && lastCpass.p === t && simT - lastCpass.at < 2.5 && isBack;
     const progN = clamp(((ptx - p.x) * dg + 200) / 400, 0, 1.2);
     let open = true;
     for (const o of vopps) if (dist2(o.x, o.y, ptx, pty) < 55) open = false;
@@ -1253,7 +1345,9 @@ function pickKick(p) {
     const succ = (1 - h) * ((open ? 0.85 : 0.35) * (0.6 + 0.4 * chan)) + h * 0.55 * (0.5 + 0.5 * h);
     const safety = isBack ? 0.7 * pressF : 0;
     const counterB = transT[p.team] > 0 ? 1.4 : 1;
-    const u = (progN + safety) * succ * TUN.pass * (1 + h * 0.6 * TUN.loft) * counterB * risk + (Math.random() - 0.5) * 0.05;
+    // 卡顿偏好:全队被困时逐渐倾向冒险前传(前传加分/回传减分,连续量)——不推进的互传循环越滚越急
+    const progBias = stuckF * 0.45 * clamp((ptx - p.x) * dg / 260, -1, 2);
+    const u = (progN + safety + progBias) * succ * TUN.pass * (1 + h * 0.6 * TUN.loft) * counterB * risk * (isReturn ? 0.35 : 1) + (Math.random() - 0.5) * 0.05;
     if (u > bu) {
       bu = u;
       best = { type: 'pass', tx: ptx, ty: pty, sp: clamp(dd * (1.7 + h * 0.6), 300, 560), alt: h * 45, bend: 0, t, pressF, u };
@@ -1320,7 +1414,8 @@ function pickKick(p) {
   // —— 踢向安全区(解围):危险度 = 离自家门近 + 被围困久;是保底候选,不是特判 ——
   // 效用随危险度平方上升:自家门口被逼→必然解围,中场只在无出路时胜出,对方半场=0 不参与
   {
-    const danger = clamp(1 - (p.x - ownGoalX(p)) * dg / 800 + 0.35 * desperate, 0, 1);
+    // 危险度随离自家门近 + 被困程度上升;卡顿积累到一定程度,解围(大脚出险)压过安全回传——逃生阀
+    const danger = clamp(1 - (p.x - ownGoalX(p)) * dg / 800 + 0.35 * desperate + 0.6 * stuckF, 0, 1.5);
     const bx = clamp(p.x + dg * 340, X0 + PR + 6, X1 - PR - 6);
     let by = p.y, bo = -1;
     for (const cy0 of [GOAL_Y - 200, GOAL_Y - 100, GOAL_Y, GOAL_Y + 100, GOAL_Y + 200]) {
@@ -1385,8 +1480,14 @@ function fireKick(p) {
   p.windAct = null;
   if (a.type === 'pass') {
     p.stats.pass++;
+    // 全队卡顿积累:不推进的传球(回传/横传)+1,有效前传 -1;门将分球不参与
+    if (!p.isGK) {
+      const prog = (a.t.x - p.x) * dirX(p);
+      if (prog < 60) stuck[p.team] = Math.min(6, stuck[p.team] + 1);
+      else stuck[p.team] = Math.max(0, stuck[p.team] - 1);
+    }
     pendingPass = { p, t: a.t, at: simT };
-    a.t.receive = { until: simT + 1.3 };
+    a.t.receive = { until: simT + 2.0 };
     p.runAfter = { until: simT + 1.5 };
     p.label = a.alt > 15 ? '高空球' : '传球'; p.labelT = 0.7;
     log(`${nameOf(p)} ${a.alt > 15 ? '高空球' : '传球'} → ${nameOf(a.t)}`, '');
@@ -1430,6 +1531,35 @@ function fireKick(p) {
   }
 }
 
+// 一脚出球/一脚射门:用飞行途中预决策的"传谁/怎么踢",接球瞬间踢出。
+// 是否一脚由场面(预决策是传/射)决定,球速不设门槛——球速只进误差:来球越快越难打准,误差是连续量,不掷骰
+function oneTouchKick(p) {
+  const a = p.preCand;
+  const inSp = Math.hypot(ball.vx, ball.vy);  // takeBall 会清零球速,先取来球速度
+  takeBall(p);
+  const err = (25 + inSp * 0.12) * (1 + Math.random());
+  const ang = Math.random() * Math.PI * 2;
+  if (a.type === 'shot') {
+    // 射门:用门将最新站位重瞄远角(只锁决策,不锁旧坐标);垂直误差吃来球速度,水平不必——门在底线兜着
+    const gk = gkOf(p.team === 'A' ? 'B' : 'A');
+    let aimY = GOAL_Y + (Math.random() < 0.5 ? -1 : 1) * GOAL_H * 0.3;
+    if (gk) aimY = GOAL_Y + (gk.y < GOAL_Y ? 1 : -1) * GOAL_H * 0.32;
+    p.windAct = { ...a, ty: aimY + Math.sin(ang) * err * 0.6 };
+  } else {
+    // 传球:落点用目标最新位置重瞄(只锁决策,不锁旧坐标)
+    const t = a.t;
+    const dd = Math.max(1, dist2(p.x, p.y, t.x, t.y));
+    const Tf = dd / clamp(dd * 2.0, 300, 540);
+    const tx = clamp(t.x + t.vx * Tf + dirX(p) * 12 + Math.cos(ang) * err, X0 + 24, X1 - 24);
+    const ty = clamp(t.y + t.vy * Tf + Math.sin(ang) * err, Y0 + 24, Y1 - 24);
+    p.windAct = { ...a, tx, ty };
+  }
+  p.preCand = null;
+  p.receive = null;
+  fireKick(p);
+  p.label = a.type === 'shot' ? '一脚射门' : '一脚出球'; p.labelT = 0.7;
+}
+
 // 高空球:空中争顶 → 头球(朝进攻方向顶,带噪声);门将不争顶——由扑救/没收机制处理
 function headerCheck() {
   if (ball.headCd > 0) return;
@@ -1469,6 +1599,9 @@ function step(dt) {
   simT += dt;
   if (transT.A > 0) transT.A -= dt;
   if (transT.B > 0) transT.B -= dt;
+  stuck.A = Math.max(0, stuck.A - dt * 0.15);  // 卡顿自然衰减:被困是处境,不是永久状态
+  stuck.B = Math.max(0, stuck.B - dt * 0.15);
+  arbitrateClaim();   // 球权仲裁:每帧决定「谁去接这颗自由球」,供力场抑制非认领者
 
   for (const p of allPlayers()) {
     if (p.cd > 0) p.cd -= dt;
@@ -1524,7 +1657,11 @@ function step(dt) {
           p.pressCd = 0.4;
           // 踉跄 = Debuff 而非禁止:踉跄者仍能伸脚抢,但成功率 ×0.35(重心没稳住)
           const staggerPen = opp.stagger > 0 ? 0.35 : 1;
-          const pDef = (0.30 + 0.30 * opp.attrs.body / (opp.attrs.body + p.attrs.body)) * (p.sprint ? 0.5 : 1) * staggerPen;
+          // 背后逼抢更难得手:按抢断者相对持球者朝向连续下调(正面=1,正后方=0.4,侧面=0.5)
+          const rdx = opp.x - p.x, rdy = opp.y - p.y, rel = Math.max(1, Math.hypot(rdx, rdy));
+          const dot = (Math.cos(p.facing) * rdx + Math.sin(p.facing) * rdy) / rel;
+          const behindPen = clamp(0.5 + 0.5 * dot, 0.4, 1);
+          const pDef = (0.30 + 0.30 * opp.attrs.body / (opp.attrs.body + p.attrs.body)) * (p.sprint ? 0.5 : 1) * staggerPen * behindPen;
           opp.stats.tackle++;
           if (Math.random() < pDef) {
             takeBall(opp);
@@ -1648,8 +1785,18 @@ function step(dt) {
           ball.y = hit.y + ny * (PR + BR + 2);
           ball.vx *= 0.92; ball.vy *= 0.92;
         }
-      } else if (fast && ball.lastTouch && ball.lastTouch.team === hit.team) {
-        takeBall(hit);
+      } else if (ball.lastTouch && ball.lastTouch.team === hit.team) {
+        // 一脚出球/射门:队友来球接球瞬间直接踢出(飞行途中已预决策)——是否一脚由场面(预决策是传/射)决定,
+        // 不设球速门槛,球速只影响打准误差;门将/预决策非传射时正常接球。
+        // 但不一脚背身回传给刚传给我的人(两人原地对传不推进),让它接住再找第三人/转身——撞墙向前直塞不受限
+        const c = hit.preCand;
+        const recent = c && (c.type === 'pass' || c.type === 'shot') && simT - hit.preAt < 0.8;
+        const backReturn = c && c.type === 'pass' && c.t === ball.lastTouch && (c.t.x - hit.x) * dirX(hit) < 0;
+        if (!hit.isGK && recent && !backReturn) {
+          oneTouchKick(hit);
+        } else {
+          takeBall(hit);
+        }
       } else if (fast) {
         const mag = Math.hypot(ball.vx, ball.vy) * (0.12 + Math.random() * 0.10);
         const ang = Math.atan2(ball.vy, ball.vx) + (Math.random() * 1.6 - 0.8);
@@ -1770,8 +1917,8 @@ function goalKick(team) {
 }
 
 function kickoffPositions() {
-  playersA.forEach((p, i) => { const a = p.isGK ? p.anchor : anchorsFor('A', playersA.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.feintAt = -10; p.gkDive = null; p.protected = 0; });
-  playersB.forEach((p, i) => { const a = p.isGK ? p.anchor : anchorsFor('B', playersB.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.feintAt = -10; p.gkDive = null; p.protected = 0; });
+  playersA.forEach((p, i) => { const a = p.isGK ? p.anchor : anchorsFor('A', playersA.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.preCand = null; p.preAt = -1e9; p.feintAt = -10; p.gkDive = null; p.protected = 0; });
+  playersB.forEach((p, i) => { const a = p.isGK ? p.anchor : anchorsFor('B', playersB.length)[i]; p.x = a.x; p.y = a.y; p.vx = 0; p.vy = 0; p.ctrl = false; p.target = null; p.force = 0; p.stagger = 0; p.role = ''; p.roleAt = -1; p.receive = null; p.patience = 0; p.mem = null; p.view = null; p.runAfter = null; p.preCand = null; p.preAt = -1e9; p.feintAt = -10; p.gkDive = null; p.protected = 0; });
   ball.x = (X0 + X1) / 2; ball.y = GOAL_Y; ball.vx = 0; ball.vy = 0; ball.alt = 0; ball.altV = 0;
   ball.ctrl = null; ball.lastTouch = null; ball.saveGK = null; ball.dead = false;
   deadBall = null;
@@ -2006,6 +2153,30 @@ function draw() {
     ctx.fillStyle = 'rgba(210,153,34,' + a.toFixed(3) + ')';
     ctx.fillText(goalText, W / 2, 80);
   }
+
+  // 情景沙盒:高亮当前选中的实体(球或球员),提示"现在要移动的是它"
+  if (sandbox && sbSel) {
+    const sx = sbSel.type === 'ball' ? ball.x : sbSel.p.x;
+    const sy = sbSel.type === 'ball' ? ball.y : sbSel.p.y;
+    const sr = sbSel.type === 'ball' ? BR + 6 : PR + 6;
+    ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+    ctx.strokeStyle = '#56d364'; ctx.lineWidth = 2.5; ctx.setLineDash([4, 3]); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // 情景沙盒:把每位球员的"决策去向"画成箭头(射门=直指球门,其余=目标点)
+  if (sandbox && sandboxDecisions.length) {
+    for (const d of sandboxDecisions) {
+      const c = d.team === 'A' ? 'rgba(248,81,73,.85)' : 'rgba(88,166,255,.85)';
+      let tx = d.tx, ty = d.ty;
+      if (tx == null && d.target) { tx = d.target.x; ty = d.target.y; }
+      if (tx == null) continue;
+      ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(tx, ty, 3.5, 0, Math.PI * 2); ctx.fillStyle = c; ctx.fill();
+    }
+  }
 }
 
 // ============ HUD ============
@@ -2066,7 +2237,7 @@ document.getElementById('btnDefault').addEventListener('click', () => {
     const inp = document.querySelector('#panel input[data-k="' + k + '"]');
     if (inp) { inp.value = d[k]; inp.nextElementSibling.textContent = d[k].toFixed(2); }
   }
-  const dft = { homeStr: 260, homeShift: 0.5, ballStr: 260, goalStr: 320, structK: 0.5, structR: 110, markBase: 234, spaceStr: 300, spaceBW: 70, spaceAspect: 1.6, chanStr: 197, aggro: 1, recoverRate: 2.5 };
+  const dft = { homeStr: 500, homeShift: 0.35, ballStr: 260, goalStr: 320, structK: 0.5, structR: 110, markBase: 234, spaceStr: 300, spaceBW: 70, spaceAspect: 1.6, chanStr: 197, aggro: 1, recoverRate: 2.5 };
   for (const k in dft) FT[k] = dft[k];
   syncFT();
   document.querySelectorAll('#tacBtns button').forEach(b => b.classList.toggle('on', b.dataset.t === 'balanced'));
@@ -2172,6 +2343,156 @@ document.getElementById('btnExport').addEventListener('click', function () {
 document.getElementById('ckTlm').addEventListener('change', function () {
   document.getElementById('tlm').style.display = this.checked ? 'block' : 'none';
   if (this.checked) { initTlm(); for (const p of allPlayers()) p.tlab = labelOf(p); }
+});
+
+// ============ 情景沙盒(最小单元测试):手动布阵 → 计算决策 → 单帧步进 ============
+let sandbox = false, sandboxDecisions = [], sbDrag = null, sbSel = null;
+
+function enterSandbox() {
+  kickoff();
+  sandbox = true; paused = true; running = false; matchT = 999; sbSel = null;
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('sandboxBar').style.display = 'block';
+  document.getElementById('btnSandbox').textContent = '沙盒中…';
+  document.getElementById('btnSandbox').classList.add('on');
+  sbCompute();
+}
+
+function exitSandbox() {
+  sandbox = false; paused = false; running = true; sandboxDecisions = []; sbDrag = null; sbSel = null;
+  document.getElementById('sandboxBar').style.display = 'none';
+  document.getElementById('sbOut').innerHTML = '';
+  document.getElementById('btnSandbox').textContent = '情景沙盒';
+  document.getElementById('btnSandbox').classList.remove('on');
+  kickoff();
+  draw();
+}
+
+// 快照/恢复:只快照 decide() 会改写的球员字段——"计算决策"是纯预览,读-改-写后回滚,不落状态
+const SB_SNAP = ['target', 'thrust', 'sprint', 'action', 'windup', 'windAct', 'label', 'labelT', 'patience',
+  'runAfter', 'receive', 'preCand', 'preAt', 'fx', 'fy', 'role', 'roleAt', 'gkDive', 'cd', 'stagger'];
+function sbSnap() { return allPlayers().map(p => { const o = { p }; for (const k of SB_SNAP) o[k] = p[k]; return o; }); }
+function sbRestore(snap) { for (const o of snap) for (const k of SB_SNAP) o.p[k] = o[k]; }
+
+const SB_KICK = { pass: '传球', shot: '射门', dribble: '趟球', clear: '解围', trick: '过人' };
+
+// 沙盒是静态快照:不跑帧暖机,直接把"攻防混合"snap 到当前球权(红持球→红攻蓝守;自由球→双方 0.6)
+function sbSettleState() {
+  const t = ball.ctrl ? ball.ctrl.team : null;
+  for (const p of allPlayers()) if (!p.isGK) p.stateMix = t ? (p.team === t ? 0 : 1) : 0.6;
+}
+
+function sbCompute() {
+  if (!sandbox) return;
+  sbSettleState();
+  arbitrateClaim();   // 球权仲裁:让沙盒也显示「谁去接这颗自由球」
+  const snap = sbSnap();
+  // 每个球员跑一遍真实决策(纯预览;随机噪声会让每次结果略有差异,但不影响"选谁/往哪去"这类结构性决策)
+  for (const p of allPlayers()) { if (!p.view || simT - p.viewAt > 0.1) buildView(p); decide(p); }
+  const holder = ball.ctrl;
+  sandboxDecisions = allPlayers().map(p => {
+    let txt, tx = null, ty = null;
+    if (p.isGK) {
+      txt = '门将·' + (p.action || '选位');
+      if (p.target) { tx = p.target.x; ty = p.target.y; }
+    } else if (p === holder) {
+      const a = p.windAct;
+      if (a) { txt = '决策:' + (SB_KICK[a.type] || a.type) + (a.t ? '→' + nameOf(a.t) : ''); tx = a.tx; ty = a.ty; }
+      else { txt = '持球·' + (p.action || '带'); if (p.target) { tx = p.target.x; ty = p.target.y; } }
+    } else {
+      txt = '决策:' + (p.action || '待命');
+      if (p.target) { tx = p.target.x; ty = p.target.y; }
+    }
+    const isClaimer = ball.claim && ball.claim[p.team] && ball.claim[p.team].p === p;
+    if (isClaimer) txt = '【我来】' + txt;
+    return { name: nameOf(p), team: p.team, txt, tx, ty, x: p.x, y: p.y, holder: p === holder, isGK: p.isGK, claimer: isClaimer };
+  });
+  sbRestore(snap);
+  renderSbOut();
+  draw();
+}
+
+function renderSbOut() {
+  const out = document.getElementById('sbOut');
+  const holder = ball.ctrl;
+  let html = '';
+  for (const d of sandboxDecisions) {
+    const cls = d.team === 'A' ? 'r' : 'b';
+    const hd = d.holder ? ' · 持球' : '';
+    html += `<span class="sb ${cls}"><b>${d.name}</b>${hd}: ${d.txt}</span>`;
+  }
+  out.innerHTML = html || '<span class="sb">(无球员——先在顶部设人数再进沙盒)</span>';
+}
+
+function sbStep(frames) {
+  if (!sandbox) return;
+  for (let i = 0; i < frames; i++) {
+    for (const p of allPlayers()) p.decideAt = -1;  // 强制本帧重新决策
+    running = true; step(1 / 60); running = false;
+  }
+  draw();
+  // 步进后立刻重算"下一步决策",便于连续观察
+  setTimeout(() => { if (sandbox) sbCompute(); }, 0);
+}
+
+function sbReset() { enterSandbox(); }
+
+document.getElementById('btnSandbox').addEventListener('click', function () { sandbox ? exitSandbox() : enterSandbox(); });
+document.getElementById('sbCompute').addEventListener('click', sbCompute);
+document.getElementById('sbStep').addEventListener('click', function () { sbStep(1); });
+document.getElementById('sbStep30').addEventListener('click', function () { sbStep(30); });
+document.getElementById('sbReset').addEventListener('click', sbReset);
+document.getElementById('sbExit').addEventListener('click', exitSandbox);
+
+// 拖拽布阵:点选球员/球 → 拖动移动;球拖到球员身上=给他球,拖到空地=自由球
+const cvEl = document.getElementById('cv');
+
+// 鼠标坐标 → 球场世界坐标。画布是 960×600 但 CSS 撑满容器宽,offsetX 是 CSS 像素,必须按显示比例换算,否则拖拽会错位
+function sbPoint(e) {
+  const r = cvEl.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) * (cvEl.width / r.width),
+    y: (e.clientY - r.top) * (cvEl.height / r.height)
+  };
+}
+
+cvEl.addEventListener('mousedown', function (e) {
+  if (!sandbox) return;
+  const { x, y } = sbPoint(e);
+  // 优先球,其次球员:点到谁就"选中"谁,并立即进入拖拽移动(dist2 是真实距离,阈值用一次方)
+  if (dist2(x, y, ball.x, ball.y) < 26) { sbDrag = sbSel = { type: 'ball' }; draw(); return; }
+  let best = null, bd = 46;
+  for (const p of allPlayers()) { const d = dist2(x, y, p.x, p.y); if (d < bd) { bd = d; best = p; } }
+  if (best) { sbDrag = sbSel = { type: 'player', p: best }; }
+  else { sbDrag = null; sbSel = null; }   // 点空地 = 取消选中
+  draw();
+});
+cvEl.addEventListener('mousemove', function (e) {
+  if (!sandbox || !sbDrag) return;
+  const { x, y } = sbPoint(e);
+  const cx = clamp(x, X0 + BR, X1 - BR), cy = clamp(y, Y0 + BR, Y1 - BR);
+  if (sbDrag.type === 'ball') {
+    ball.x = cx; ball.y = cy; ball.vx = 0; ball.vy = 0; ball.alt = 0; ball.altV = 0; ball.bend = 0; ball.dead = false; ball.ctrl = null;
+  } else {
+    const p = sbDrag.p;
+    p.x = cx; p.y = cy; p.vx = 0; p.vy = 0;
+    // 清掉临时状态,让布阵后是干净的静态场景
+    p.windup = 0; p.windAct = null; p.runAfter = null; p.receive = null; p.preCand = null; p.stagger = 0; p.cd = 0;
+    if (ball.ctrl === p) { ball.x = cx; ball.y = cy; }
+  }
+  draw();
+});
+cvEl.addEventListener('mouseup', function () {
+  if (!sandbox || !sbDrag) return;
+  if (sbDrag.type === 'ball') {
+    let best = null, bd = 34;
+    for (const p of allPlayers()) { const d = dist2(ball.x, ball.y, p.x, p.y); if (d < bd) { bd = d; best = p; } }
+    if (best) { ball.ctrl = best; best.ctrl = true; ball.x = best.x; ball.y = best.y; ball.vx = 0; ball.vy = 0; ball.lastTouch = best; }
+    else ball.ctrl = null;
+  }
+  // 松开后保留选中(高亮圈还在),方便继续点选/移动同一个实体
+  sbDrag = null;
+  sbCompute();
 });
 
 kickoff();

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>涌现式足球模拟器 · 项目规划(v1.0)</title>
+<title>涌现式足球模拟器 · 项目规划(v4.9)</title>
 <style>
   :root {
     --bg: #0d1117; --bg-soft: #161b22; --card: #1c2330; --line: #2d3748;
@@ -166,7 +166,7 @@
 <body>
 
 <header>
-  <div class="kickoff">PROJECT VISION · 涌现式 AI 足球模拟 v1.0</div>
+  <div class="kickoff">PROJECT VISION · 涌现式 AI 足球模拟 v4.9</div>
   <h1>涌现式足球模拟器 <span class="accent">· 项目规划</span></h1>
   <p class="subtitle">终极目标:<b style="color:var(--green-bright)">把人类真实踢球的感觉量化为数据,用数据驱动的方式模拟人类现实足球的场景</b>。
   真实比赛里球员的每一个选择——传/带/射/过、站哪里、何时逼抢、被侵犯后是否上头——都拆解为可计算的数学结构,让智能体"涌现"出真实、每场不同的战术行为。</p>
@@ -179,7 +179,7 @@
   <div class="meta-row">
     <span class="pill">引擎: Godot 4 / 当前 HTML+JS 沙盒</span>
     <span class="pill">路线: 力场叠加 + 阈值触发器</span>
-    <span class="pill">版本: v2.9 可玩(3v3+门将)</span>
+    <span class="pill">版本: v4.9 可玩(3v3+门将)</span>
     <span class="pill">规模: 3v3 起步 → 11v11</span>
   </div>
 </header>
@@ -222,8 +222,10 @@
         </div>
         <div class="layer" style="--lc:#3fb950">
           <div class="ln">决策层 · 主控</div>
-          <div class="ld">效用式决策(控球者:射门/传球·地面高空/带球/过人,取最大)+ 角色式站位(无球者:支援/逼抢/回防/抢球/补位)+ 蓄力 + 阈值触发器 + 反击爆发。<br>
-            站位评分:<span class="eq">分数 = 开放度 + 传球通道 + 推进价值 + 宽度 + 车道</span>(选"对比赛最有利"的点)</div>
+          <div class="ld">控球者:效用式决策(射门/传球·地面高空/带球/过人,取最大)+ 蓄力 + 阈值触发器。<br>
+            无球者:<b>力场叠加</b>(七力:阵型/球引力/门保护/结构弹簧/盯人/空位/通道)× 攻防权重模板(W_ATT/W_DEF,按 recoverRate 平滑)+ 方向采样密度场 —— <b>站位/逼抢/回防/补位全部由力场涌现</b>,不写离散角色逻辑。<br>
+            合理状态机例外:门将(选位/出击/扑救)、死球发球人、发球保护期 —— 这些职责天然离散,保留状态机(ADR-10)。<br>
+            旧网格评分(开放度+通道+推进+宽度+车道)保留为「旧逻辑」,仅作对踢基线。</div>
         </div>
         <div class="layer" style="--lc:#d29922">
           <div class="ln">驱动层 · 身体</div>
@@ -287,6 +289,14 @@
         <li><span class="box">✓</span><span><span class="txt">R6 破局计时器 + 解围</span><span class="sub">耐心 3s 耗尽且被包围 → 大脚解围/仓促射门(生理性动作)</span></span></li>
       </ul>
 
+      <h3>力场空间智能(v4.x,默认引擎)<span class="tag done">已实现</span></h3>
+      <ul class="checklist" data-group="力场">
+        <li><span class="box">✓</span><span><span class="txt">七力场叠加</span><span class="sub">阵型(锚点随球平移)/ 球引力 / 门保护 / 结构弹簧 / 盯人 / 空位(方向采样密度场)/ 通道 —— 攻防 = W_ATT/W_DEF 权重模板投影</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">攻防平滑转换 + 连续分工</span><span class="sub">stateMix(wa/wd)按 recoverRate 平滑;就近份额 pressShare ∈ [0,1] 连续分工(最近者扑、其余封堵,中间是坡度不是开关,ADR-10)</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">新旧 AI 对踢开关</span><span class="sub">URL ?aiA=new&amp;aiB=old(默认力场);力场 vs 旧网格逻辑可同场对踢比较</span></span></li>
+        <li><span class="box">✓</span><span><span class="txt">力场参数面板 + 战术模板</span><span class="sub">13 滑条(FT)+ FT_TACTICS 战术模板映射 + AI 版本选择器</span></span></li>
+      </ul>
+
       <h3>空间价值定位(v2.0)<span class="tag done">已实现</span></h3>
       <ul class="checklist" data-group="空间">
         <li><span class="box">✓</span><span><span class="txt">R1 期望值空间价值</span><span class="sub">支援站位 V = P×Gain − (1−P)×Loss(打穿收益 vs 被反击损失)</span></span></li>
@@ -315,20 +325,14 @@
     <!-- 4 调参体系 -->
     <section id="s4">
       <h2><span class="no">4</span>调参体系(左侧面板,实时生效)</h2>
-      <h3>4.1 参数表(20 个)</h3>
+      <h3>4.1 参数表(三组)</h3>
       <table>
-        <tr><th>分组</th><th>参数</th><th>范围</th><th>说明</th></tr>
-        <tr><td>决策倾向</td><td>传球 / 射门 / 过人 / 带球</td><td>×0~2</td><td class="dim">效用倍率,决定行为偏好</td></tr>
-        <tr><td>决策倾向</td><td>高空球 loft</td><td>×0~2</td><td class="dim">高空球效用加成</td></tr>
-        <tr><td>空间价值(进攻)</td><td>开放度 / 通道 / 推进 / 宽度 / 车道</td><td>0~0.6</td><td class="dim">站位评分权重</td></tr>
-        <tr><td>空间价值(进攻)</td><td>支援距离 sDepth</td><td>0.4~1.6</td><td class="dim">贴身短传 ↔ 拉开纵深</td></tr>
-        <tr><td>防守站位</td><td>封堵通道 / 开放度 / 车道偏好</td><td>0~0.6</td><td class="dim">回防站位权重</td></tr>
-        <tr><td>防守站位</td><td>防线深度 dLine</td><td>0.15~0.6</td><td class="dim">蹲坑 0.22 ↔ 高位 0.52</td></tr>
-        <tr><td>防守站位</td><td>逼抢强度 press</td><td>0~2</td><td class="dim">≥1.3 触发两人夹抢</td></tr>
-        <tr><td>物理/节奏</td><td>对手斥力 rep</td><td>0~600</td><td class="dim">空间物理感</td></tr>
-        <tr><td>物理/节奏</td><td>踉跄时长 stag</td><td>×0.2~2</td><td class="dim">身体失衡恢复</td></tr>
-        <tr><td>物理/节奏</td><td>蓄力时间 wind</td><td>×0~2</td><td class="dim">出球准备时间</td></tr>
+        <tr><th>分组</th><th>参数</th><th>说明</th></tr>
+        <tr><td><b>力场参数(FT,13 个)</b><span class="tag core">默认引擎主杠杆</span></td><td>homeStr / homeShift / ballStr / goalStr / structK / structR / markBase / spaceStr / spaceBW / spaceAspect / chanStr / aggro / recoverRate</td><td class="dim">七力强度 + 攻防转换速率;默认力场模式下全部生效,战术模板 FT_TACTICS 也映射到这 13 个</td></tr>
+        <tr><td><b>决策倾向(共享)</b></td><td>传球 / 射门 / 过人 / 带球 / 高空球</td><td class="dim">控球者效用倍率 + 蓄力,新旧引擎共用</td></tr>
+        <tr><td><b>遗留旧参数(仅 ?ai=old 生效)</b><span class="tag warn">力场下为死滑条</span></td><td>wo / wc / wp / wW / wL、dDeny / dOpen / dLane、sDepth、press</td><td class="dim">旧网格站位评分权重与逼抢开关;力场模式被七力替代,不再读取</td></tr>
       </table>
+      <p class="dim" style="margin-top:8px">在力场(默认)模式下,左侧面板里 <b>wo/wc/wp/wW/wL、dDeny/dOpen/dLane、sDepth、press</b> 为死滑条(改它们无效果),因为无球移动已改由七力场驱动。力场手感请调 FT 面板。</p>
 
       <h3>4.2 战术预设(一键切换,滑条同步)</h3>
       <table>
@@ -355,6 +359,7 @@
       <div class="adr"><span class="nm">ADR-7</span><p><b>身体限制是真实感的根基。</b>踉跄/动量/蓄力都是"身体做不到"带来的自然决策。</p></div>
       <div class="adr"><span class="nm">ADR-8</span><p><b>防守需要"节奏停顿"。</b>拦截/抢断后必须有踉跄期,否则乒乓式反复拦截。</p></div>
       <div class="adr"><span class="nm">ADR-9</span><p><b>动作涌现化(最高原则)。</b>不设离散"动作按钮"——射门方式(吊射/低平/弧线)、传球高度(地面/高空)、带球方式(紧密/趟球)全部由局势量化后自然涌现;评估与执行共用同一模型,杜绝动作特判。</p></div>
+      <div class="adr"><span class="nm">ADR-10</span><p><b>涌现优先,状态机是例外。</b>离散状态机只用于真正离散的职责(门将选位/出击/扑救、死球发球人、发球保护期);空间与分工必须由连续场涌现——攻防转换靠 stateMix 平滑、逼抢分工靠 pressShare 连续份额,<b>不设主控层硬开关</b>(v4.5/v4.7 的阶段硬掐断与扑球资格状态机已在 v4.8 软化为连续权重)。v4.9 新增「球权认领」是唯一新增的离散协调例外:「谁去接这颗自由球」是共识问题,不能靠独立力场涌现,故用 <code>ball.claim</code> 每帧仲裁一次;但它只压掉非认领者的抢球力,认领者的移动仍由力场驱动——协调离散、运动连续。</p></div>
     </section>
 
     <!-- 6 难点 -->
@@ -380,13 +385,15 @@
     <!-- 8 路线图 -->
     <section id="s8">
       <h2><span class="no">8</span>路线图</h2>
-      <h3>已实现(v2.9)<span class="tag done">可玩</span></h3>
+      <h3>已实现(v4.9)<span class="tag done">可玩</span></h3>
       <table>
         <tr><th>阶段</th><th>内容</th><th>状态</th></tr>
         <tr><td>v0.1~v1.0</td><td>沙盒→空间价值→身体对抗→高空球→蓄力→战术预设(1D→2D 全历程)</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
         <tr><td>v2.0</td><td>感知层(视野锥/遮挡/高斯误差/触觉)+ 记忆层(预测/默契度)+ R4 效用 + R1 期望值 + 解围 + 边线球/球门球站位</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
         <tr><td>v2.1~v2.8</td><td>二过一/节奏/假动作/防守协同 → 门将系统 → 死球机制/蓄力随感知/回传门将/射门选角/高空球扑救/慢速下拉</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
         <tr><td>v2.9</td><td><b>动作涌现化</b>:射门方式/传球高度/带球趟球全部由局势量化决定,不设离散动作(ADR-9 最高原则)</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v3.x</td><td><b>对球作用统一涌现化</b>:五类候选统一效用+统一执行;视野半角 120°→160°;最小单元化+Debuff;门将选位;支援空间创造</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
+        <tr><td>v4.x</td><td><b>力场空间智能</b>:七力+权重模板+密度场(默认引擎);新旧对踢;自动调参;v4.8 主控层软化回归涌现(ADR-10);v4.9 门将防乌龙+情景沙盒+球权认领</td><td class="dim" style="color:var(--green-bright)">✓</td></tr>
       </table>
       <h3>下一步(按优先级)</h3>
       <div class="timeline">
@@ -401,7 +408,7 @@
 
     <!-- 9 验证 -->
     <section id="s9">
-      <h2><span class="no">9</span>验证记录(v2.9 基线)</h2>
+      <h2><span class="no">9</span>验证记录(v4.9 基线)</h2>
       <div class="grid">
         <div class="card"><div class="k">均衡胜负</div><div class="v">多次 8~10 场抽样:红蓝互有胜负(2~4 胜/3 平),无系统失衡</div></div>
         <div class="card"><div class="k">传球成功率</div><div class="v">86~91%(误差收窄后);趟球(涌现)9~12 次/场,挑射 0~2 次/场(门将出击时)</div></div>
@@ -532,6 +539,7 @@
         <tr><td class="dim" style="font-family:monospace">node tools/eval.js</td><td class="dim">内置 6 套配置(均衡+5 战术),每套 3 场</td></tr>
         <tr><td class="dim" style="font-family:monospace">node tools/eval.js --rounds 5</td><td class="dim">每套 5 场(场数越多方差越可信)</td></tr>
         <tr><td class="dim" style="font-family:monospace">node tools/eval.js --configs tools/configs/example.json</td><td class="dim">叠加自定义配置(JSON 只写要改的参数)</td></tr>
+        <tr><td class="dim" style="font-family:monospace">node tools/tune.js [--iters N] [--rounds N] [--params 逗号列表]</td><td class="dim">力场自动调参:以"力场 vs 旧逻辑对踢净球差"为目标函数,随机搜索 13 个 FT 参数</td></tr>
       </table>
 
       <h3>12.2 流程与产物</h3>
@@ -583,14 +591,14 @@
         <tr><td>数据目录</td><td class="dim">data/runs/ 只保留最新一轮(管线自动清理),不入库</td></tr>
       </table>
 
-      <h3>13.4 当前版本状态(v2.8)</h3>
-      <div class="card"><div class="v"><b>v2.9</b>:3v3+门将(人数可配,门将不占名额)/ 感知层(视野锥+遮挡+触觉+记忆预测)/ 效用决策(R4 收益×成功率×风格×风险)/ 空间价值(R1 期望值+创造者拉边)/ 身体对抗+踉跄/ 高空球+头球/ 二过一+假动作/ 节奏控制/ 死球机制(边线球发球人+球门球门将开,发球保护期)/ 蓄力随感知(压力↑蓄力↓误差↑)/ 回传门将+自家门前强制解围/ 门将读场+高空球扑救/ <b>动作涌现化(ADR-9):射门方式/传球高度/带球趟球全部由局势量化决定,不设离散动作</b>/ 慢速下拉/ 赛后数据+热区图+遥测+导出 / 自动化管线。</div></div>
+      <h3>13.4 当前版本状态(v4.9)</h3>
+      <div class="card"><div class="v"><b>v4.9</b>:3v3+门将(人数可配,门将不占名额)/ 感知层(视野锥+遮挡+触觉+记忆预测)/ 效用决策(R4 收益×成功率×风格×风险)/ 身体对抗+踉跄 / 高空球+头球 / 死球机制(边线球发球人+球门球门将开,发球保护期)/ 蓄力随感知 / 回传门将+门前解围 / 门将读场+高空球扑救 / <b>动作涌现化(ADR-9):射门方式/传球高度/带球趟球全部由局势量化决定,不设离散动作</b> / <b>力场空间智能(默认引擎):七力+攻防权重模板+方向采样密度场,攻防转换 stateMix 平滑、逼抢分工 pressShare 连续(ADR-10 涌现优先)</b> / 新旧 AI 对踢开关 + 自动调参 tune.js / <b>门将扑出明确向外打(防乌龙)</b> / <b>情景沙盒(最小单元测试:手动布阵 + 计算决策 + 单帧步进)</b> / <b>球权认领「我来!」(自由球/二点球每帧仲裁谁去接,非认领者退开——离散协调层,ADR-10 例外)</b> / 赛后数据+热区图+遥测+导出 / 自动化管线。</div></div>
 
       <h3>13.5 下一步候选(按路线图)</h3>
       <div class="card"><div class="v">情绪层(愤怒值→冲突,已设计待实现)/ 疲劳与精力系统(蓄力失误联动)/ 越位与多阵型 / 教练 AI(自动换战术)/ 自动战斗快模型 / 本地 LLM 新闻。</div></div>
     </section>
 
-    <footer>涌现式足球模拟器 · 项目规划 v2.8 · 终极目标:把人类真实踢球的感觉量化为数据</footer>  </main>
+    <footer>涌现式足球模拟器 · 项目规划 v4.9 · 终极目标:把人类真实踢球的感觉量化为数据</footer>  </main>
 </div>
 
 <script>
