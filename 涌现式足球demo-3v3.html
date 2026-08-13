@@ -92,6 +92,9 @@
   #sbOut .sb b { color: #e6edf3; }
   #sbOut .sb.r { border-left: 3px solid #f85149; }
   #sbOut .sb.b { border-left: 3px solid #58a6ff; }
+  #sbBadge { color: #56d364; font-weight: 700; letter-spacing: .05em; border: 1px solid rgba(63,185,80,.5); background: rgba(63,185,80,.12); border-radius: 999px; padding: 3px 12px; }
+  #sbBtns button.export { color: #d29922; border-color: rgba(210,153,34,.5); background: rgba(210,153,34,.08); }
+  #sbBtns button.export:hover { border-color: #d29922; background: rgba(210,153,34,.16); }
 
 
   #overlay {
@@ -219,12 +222,14 @@
   <div id="log"></div>
   <div id="sandboxBar" style="display:none">
     <div id="sbBtns">
+      <span id="sbBadge">🧪 情景沙盒模式</span>
       <button id="sbCompute">计算决策</button>
       <button id="sbStep">下一步(1帧)</button>
       <button id="sbStep30">推进0.5s</button>
       <button id="sbReset">重置布阵</button>
+      <button id="sbExport" class="export">导出此刻(JSON)</button>
       <button id="sbExit">退出沙盒</button>
-      <span id="sbHint">点选球员/球(绿圈高亮)再拖动即可移动 · 球拖到球员身上=给他球,拖到空地=自由球 · 点空白处取消选中 · 先用上方「红/蓝球员人数」设好 2v1 等场景</span>
+      <span id="sbHint">点选球员/球(绿圈高亮)再拖动即可移动 · 球拖到球员身上=给他球,拖到空地=自由球 · 点空白处取消选中 · 「导出此刻」把当前瞬间存成 JSON 供分析</span>
     </div>
     <div id="sbOut"></div>
   </div>
@@ -403,6 +408,7 @@ function takeBall(p) {
   const prev = ball.ctrl;
   ball.ctrl = p; p.ctrl = true;
   ball.vx = 0; ball.vy = 0; ball.lastTouch = p;
+  if (p.isGK) p.protected = simT + 2;  // 门将抱球保护:2s 内无人能抢/干扰(现实中的"用手抱球")
   if (prev && prev.team !== p.team) transT[p.team] = 2.5;  // 夺回球权 → 反击爆发
   if (pendingPass) {
     if (p.team === pendingPass.p.team) {
@@ -841,6 +847,8 @@ function gkSave(gk) {
 function gkDecide(p, pb, dg) {
   if (ball.ctrl === p) {
     if (p.cd > 0 || p.windup > 0) return;
+    // 抱球保护:接住/没收后先持球(现实中的"用手抱球"),期间 2s 无敌、无人能抢/干扰发球,再从容开大脚
+    if (simT < p.protected) { p.action = '抱球'; return; }
     gkKick(p);
     return;
   }
@@ -2137,6 +2145,10 @@ function draw() {
     if (ball.ctrl === p) {
       ctx.beginPath(); ctx.arc(p.x, p.y, PR + 5, 0, Math.PI * 2);
       ctx.strokeStyle = '#d29922'; ctx.lineWidth = 2; ctx.stroke();
+      if (p.isGK && simT < p.protected) {   // 抱球保护圈:2s 无敌(醒目虚线金圈)
+        ctx.beginPath(); ctx.arc(p.x, p.y, PR + 11, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(210,153,34,.9)'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
+      }
     }
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 12px system-ui';
@@ -2483,11 +2495,57 @@ function sbStep(frames) {
 
 function sbReset() { enterSandbox(); }
 
+// 导出此刻:把当前静态瞬间(球 + 每位球员位置/速度/攻防态/决策/目标点)存成 JSON,方便复盘分析
+function sbExportInstant() {
+  if (!sandbox) return;
+  sbCompute();   // 先刷新一次决策(纯预览,不回滚结构),保证导出的决策是当前布局的最新结果
+  const b = ball;
+  const dec = {};
+  for (const d of sandboxDecisions) dec[d.name] = d;
+  const snap = {
+    meta: {
+      type: '足球模拟 · 情景快照',
+      version: 'v4.11',
+      exportedAt: new Date().toLocaleString(),
+      note: '此刻的静态瞬间:ball=球(ctrl=持球者, claim=认领者), players=每位球员(decision=当前决策, target=决策目标点)。x/y 是球场世界坐标(960×600)。'
+    },
+    ball: {
+      x: +b.x.toFixed(1), y: +b.y.toFixed(1), alt: +b.alt.toFixed(1),
+      vx: +b.vx.toFixed(1), vy: +b.vy.toFixed(1),
+      ctrl: b.ctrl ? nameOf(b.ctrl) : null,
+      claim: ball.claim ? {
+        A: (ball.claim.A && ball.claim.A.p) ? nameOf(ball.claim.A.p) : null,
+        B: (ball.claim.B && ball.claim.B.p) ? nameOf(ball.claim.B.p) : null
+      } : null
+    },
+    players: allPlayers().map(p => {
+      const d = dec[nameOf(p)];
+      return {
+        name: nameOf(p), team: p.team, isGK: !!p.isGK,
+        x: +p.x.toFixed(1), y: +p.y.toFixed(1), vx: +p.vx.toFixed(1), vy: +p.vy.toFixed(1),
+        stateMix: +p.stateMix.toFixed(2),
+        attrs: { speed: +p.attrs.speed.toFixed(2), pass: +p.attrs.pass.toFixed(2), shoot: +p.attrs.shoot.toFixed(2), body: +p.attrs.body.toFixed(2) },
+        decision: d ? d.txt : '',
+        target: d && d.tx != null ? { x: +d.tx.toFixed(1), y: +d.ty.toFixed(1) } : null
+      };
+    })
+  };
+  const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '足球模拟_情景快照_' + new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
 document.getElementById('btnSandbox').addEventListener('click', function () { sandbox ? exitSandbox() : enterSandbox(); });
 document.getElementById('sbCompute').addEventListener('click', sbCompute);
 document.getElementById('sbStep').addEventListener('click', function () { sbStep(1); });
 document.getElementById('sbStep30').addEventListener('click', function () { sbStep(30); });
 document.getElementById('sbReset').addEventListener('click', sbReset);
+document.getElementById('sbExport').addEventListener('click', sbExportInstant);
 document.getElementById('sbExit').addEventListener('click', exitSandbox);
 
 // 拖拽布阵:点选球员/球 → 拖动移动;球拖到球员身上=给他球,拖到空地=自由球

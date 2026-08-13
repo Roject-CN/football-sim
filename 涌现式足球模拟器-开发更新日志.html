@@ -66,7 +66,7 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="kickoff">DEVELOPMENT LOG · v0.1 → v4.10</div>
+    <div class="kickoff">DEVELOPMENT LOG · v0.1 → v4.11</div>
     <h1>开发更新日志 <span class="accent">· 涌现式足球模拟器</span></h1>
     <p class="sub">记录从想法到可运行 demo 的每一步迭代:改了什么、为什么改、验证结果如何。
     终极目标:<b>把人类真实踢球的感觉量化为数据,用数据驱动的方式模拟人类现实足球的场景。</b></p>
@@ -138,7 +138,7 @@
   </div>
 
   <div class="v" style="--vc:#56d364">
-    <div class="vhead"><span class="vname">v4.10 · 直塞(传空当,让队友跑上去接)</span><span class="vtag">最新</span><span class="vdate">2026-08-13</span></div>
+    <div class="vhead"><span class="vname">v4.10 · 直塞(传空当,让队友跑上去接)</span><span class="vtag">上一版</span><span class="vdate">2026-08-13</span></div>
     <div class="vquote"><b>目标:</b>AI 之前几乎只传脚下球——「把球踢到队友脚上」永远优先于「踢到队友跑位方向的前方空当」,观感上不会直塞(through-ball)。</div>
     <div class="sec">直塞候选(非离散动作,仍同一套「踢向目标点」哲学)</div>
     <ul>
@@ -147,6 +147,27 @@
       <li><b>哲学契合:</b>直塞和传脚共用同一效用函数、同一执行(<code>fireKick</code>/<code>oneTouchKick</code> 按 <code>a.through</code> 重瞄空当落点),「传脚 vs 传空当」由收益×成功率自然涌现,不引入新的离散动作类型(ADR-9)</li>
     </ul>
     <div class="data">验证:eval 10 场(5 配置 × 2)无崩溃、比分正常;直塞 30 次 / 传球 642 次 ≈ <b>4.7%</b>;整体传球成功率 88~94.5%(直塞更冒险但占比小,不破坏传控);赛后事件标签「直塞 / 传球 / 高空球」可辨。</div>
+  </div>
+
+  <div class="v" style="--vc:#56d364">
+    <div class="vhead"><span class="vname">v4.11 · 情景沙盒独立模式 + 导出此刻 + 门将抱球保护</span><span class="vtag">最新</span><span class="vdate">2026-08-13</span></div>
+    <div class="vquote"><b>目标:</b>把沙盒从"暂停比赛的小工具"升级成独立测试台,并能把当前瞬间一键存成 JSON 供复盘;同时给门将"用手抱球"的 2s 无敌保护,避免接球后立刻被抢丢球。</div>
+    <div class="sec">情景沙盒独立模式</div>
+    <ul>
+      <li>沙盒栏首位加「🧪 情景沙盒模式」徽章;进出都重建比赛状态,布阵/计算决策/单帧步进是独立生命周期,不污染实时比分与日志——与正式对局完全隔离</li>
+    </ul>
+    <div class="sec">导出此刻(JSON)</div>
+    <ul>
+      <li>沙盒内新增「导出此刻(JSON)」按钮:把当前静态瞬间一键存成 JSON——球(位置/速度/高度/持球者/认领者)+ 每位球员(位置/速度/攻防态 stateMix/关键属性/当前决策/决策目标点),先刷新一次决策再导出,保证是"此刻最新"</li>
+      <li>坐标是球场世界坐标(960×600),可直接喂给分析脚本或人工复盘;meta 里带版本/时间/字段说明,便于后续对齐</li>
+    </ul>
+    <div class="sec">门将抱球 2s 保护(现实中的"用手抱球")</div>
+    <ul>
+      <li>门将接住/没收(持球)后进入 <b>2s 无敌</b>:期间无人能抢、无人能干扰发球(拿球瞬间 <code>takeBall</code> 记 <code>protected = simT+2</code>,决策层持球先「抱球」站稳再从容开大脚)</li>
+      <li>视觉:<b>虚线金圈</b>标示保护期,动作标签「没收 → 抱球 → 大脚」清晰展示"接住-持球-出球"三阶段;仅限持球生效,扑出/出击的活球仍可被争抢(与现实一致)</li>
+      <li>哲学:门将本就是 ADR-10 允许的合理状态机例外,这条只补"持球保护"一个连续时间窗,不引入新动作类型</li>
+    </ul>
+    <div class="data">验证:eval 10 场(5 配置 × 2)无崩溃、比分正常;门将抱球 2s 后开大脚,保护期内无抢断路径(持球者=门将时抢断判定已排除,现再加时间窗+视觉)。</div>
   </div>
 
   <div class="v" style="--vc:#3fb950">
