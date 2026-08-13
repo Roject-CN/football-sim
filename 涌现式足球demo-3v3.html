@@ -1685,7 +1685,9 @@ function oneTouchKick(p) {
   p.label = a.type === 'shot' ? '一脚射门' : '一脚出球'; p.labelT = 0.7;
 }
 
-// 高空球:空中争顶 → 头球(朝进攻方向顶,带噪声);门将不争顶——由扑救/没收机制处理
+// 高空球:空中争顶 → 头球;门将不争顶——由扑救/没收机制处理。
+// 头球是"争顶"不是"接球":附近有对手才顶(无对手=让球落下停住,别把大脚变成"无人盯防直接头球送门将")。
+// 顶向哪里也分情境:离门近=顶向球门(射门式),离门远=摆渡点给最有威胁的队友(别弱顶直送对方门将)。
 function headerCheck() {
   if (ball.headCd > 0) return;
   if (ball.alt < 20 || ball.alt > 90) return;
@@ -1696,20 +1698,47 @@ function headerCheck() {
     if (d < PR + BR + 16 && d < hd) { hd = d; hit = p; }
   }
   if (!hit) return;
-  const gx = goalX(hit) + (Math.random() - 0.5) * 30;
-  const gy = GOAL_Y + (Math.random() - 0.5) * 200;
+  // 无争顶压力(附近无对手):不头球,让球落到 alt≤6 自然停住(takeBall)——避免"大脚→头球→门将没收"死循环
+  let contested = false;
+  for (const o of oppsOf(hit)) {
+    if (o.isGK) continue;
+    if (dist2(o.x, o.y, ball.x, ball.y) < 60) { contested = true; break; }
+  }
+  if (!contested) return;
+  const dg = dirX(hit);
+  const gc = { x: goalX(hit), y: GOAL_Y };
+  const gDist = dist2(hit.x, hit.y, gc.x, gc.y);
+  let gx, gy;
+  if (gDist < 320) {
+    // 离门够近:顶向球门(射门式头球),瞄准远角带噪声
+    gx = gc.x + (Math.random() - 0.5) * 30;
+    gy = GOAL_Y + (Math.random() - 0.5) * 200;
+  } else {
+    // 中场争顶:摆渡/点给最有威胁的队友(向前推进 + 中路),而不是弱顶直送对方门将
+    let bt = null, bu = -1e9;
+    for (const t of matesOf(hit)) {
+      if (t === hit || t.isGK) continue;
+      const prog = (t.x - hit.x) * dg;
+      const dd = Math.max(1, dist2(hit.x, hit.y, t.x, t.y));
+      const central = 1 - Math.abs(t.y - GOAL_Y) / 260;
+      const u = prog / 300 - dd / 800 + central * 0.3 + Math.random() * 0.15;
+      if (u > bu) { bu = u; bt = t; }
+    }
+    if (bt) { gx = bt.x + bt.vx * 0.4; gy = bt.y + bt.vy * 0.4; }
+    else { gx = hit.x + dg * 130; gy = GOAL_Y + (Math.random() - 0.5) * 140; }
+  }
   const d = Math.max(1, dist2(hit.x, hit.y, gx, gy));
   const sp = 170 + 100 * hit.attrs.body + Math.random() * 40;
   ball.vx = (gx - hit.x) / d * sp;
   ball.vy = (gy - hit.y) / d * sp;
-  ball.alt = 6; ball.altV = 40;
+  ball.alt = 8; ball.altV = 40;
   ball.headCd = 0.35;
   ball.lastTouch = hit;
   hit.stats.header++;
   pendingClaim = { p: hit, team: hit.team, key: 'header' };
-  hit.label = '头球'; hit.labelT = 0.6;
+  hit.label = gDist < 320 ? '头球' : '摆渡'; hit.labelT = 0.6;
   hit.cd = Math.max(hit.cd, 0.25);
-  log(`${nameOf(hit)} 头球!`, '');
+  log(`${nameOf(hit)} ${gDist < 320 ? '头球!' : '摆渡'}`, '');
 }
 
 function sideClear(p, side, opps) {
